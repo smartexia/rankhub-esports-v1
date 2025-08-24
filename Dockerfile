@@ -3,11 +3,16 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
+
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (including devDependencies for build)
-RUN npm ci
+# Install dependencies with fallback strategies
+RUN npm cache clean --force && \
+    (npm ci --no-audit --no-fund || npm install --no-audit --no-fund) && \
+    npm list --depth=0
 
 # Copy source code
 COPY . .
