@@ -11,7 +11,9 @@ COPY package*.json ./
 
 # Install dependencies with fallback strategies
 RUN npm cache clean --force && \
-    (npm ci --no-audit --no-fund || npm install --no-audit --no-fund)
+    (npm ci --no-audit --no-fund || npm install --no-audit --no-fund) && \
+    npm install vite --save-dev && \
+    npx vite --version
 
 # Copy source code
 COPY . .
