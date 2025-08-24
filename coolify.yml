@@ -1,0 +1,210 @@
+# ==============================================
+# RankHub v1 - Coolify Configuration
+# ==============================================
+# This file contains configuration for Coolify deployment
+# Place this in your project root for automatic configuration
+
+version: '1.0'
+
+project:
+  name: rankhub-esports-v1
+  description: Sistema de Gestão de Campeonatos de Esports
+  repository: https://github.com/smartexia/rankhub-esports-v1.git
+  branch: main
+
+build:
+  # Build configuration
+  buildpack: docker
+  dockerfile: Dockerfile
+  
+  # Build commands (if not using Docker)
+  # install_command: npm ci
+  # build_command: npm run build:prod
+  # start_command: nginx -g 'daemon off;'
+  
+  # Build arguments
+  args:
+    NODE_ENV: production
+  
+  # Build context
+  context: .
+  
+  # Build cache
+  cache: true
+
+runtime:
+  # Runtime configuration
+  port: 80
+  
+  # Health check
+  health_check:
+    path: /health
+    interval: 30
+    timeout: 10
+    retries: 3
+    start_period: 40
+  
+  # Resource limits
+  resources:
+    memory: 512Mi
+    cpu: 0.5
+  
+  # Restart policy
+  restart: unless-stopped
+
+environment:
+  # Environment variables (values should be set in Coolify UI)
+  variables:
+    - name: NODE_ENV
+      value: production
+      required: true
+    
+    - name: VITE_SUPABASE_URL
+      description: "Supabase project URL"
+      required: true
+      example: "https://your-project.supabase.co"
+    
+    - name: VITE_SUPABASE_ANON_KEY
+      description: "Supabase anonymous key"
+      required: true
+      sensitive: false  # This is public by design
+    
+    - name: VITE_APP_TITLE
+      value: "RankHub"
+      required: false
+    
+    - name: VITE_APP_DESCRIPTION
+      value: "Sistema de Gestão de Campeonatos de Esports"
+      required: false
+    
+    - name: VITE_APP_URL
+      description: "Production domain URL"
+      required: true
+      example: "https://your-domain.com"
+
+networking:
+  # Domain configuration
+  domains:
+    - type: custom
+      ssl: true
+      redirect_www: true
+  
+  # CORS configuration (handled by nginx)
+  cors:
+    enabled: true
+    origins:
+      - "*"
+    methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+    headers:
+      - "*"
+
+security:
+  # Security headers (handled by nginx.conf)
+  headers:
+    x_frame_options: SAMEORIGIN
+    x_content_type_options: nosniff
+    x_xss_protection: "1; mode=block"
+    referrer_policy: no-referrer-when-downgrade
+  
+  # Rate limiting (if supported)
+  rate_limit:
+    enabled: false
+    requests_per_minute: 100
+
+monitoring:
+  # Logging configuration
+  logs:
+    level: info
+    retention: 7d
+  
+  # Metrics
+  metrics:
+    enabled: true
+    path: /metrics
+  
+  # Alerts (if supported)
+  alerts:
+    - type: health_check_failed
+      threshold: 3
+    - type: high_memory_usage
+      threshold: 90
+    - type: high_cpu_usage
+      threshold: 80
+
+deployment:
+  # Deployment strategy
+  strategy: rolling
+  
+  # Auto-deploy configuration
+  auto_deploy:
+    enabled: true
+    branch: main
+    webhook: true
+  
+  # Pre-deploy hooks
+  hooks:
+    pre_deploy:
+      - echo "Starting deployment..."
+      - echo "Checking environment variables..."
+    
+    post_deploy:
+      - echo "Deployment completed!"
+      - echo "Application is running on port 80"
+  
+  # Rollback configuration
+  rollback:
+    enabled: true
+    keep_releases: 5
+
+# Additional services (if needed in the future)
+services:
+  # Example: Redis cache
+  # redis:
+  #   image: redis:alpine
+  #   port: 6379
+  #   environment:
+  #     REDIS_PASSWORD: ${REDIS_PASSWORD}
+  
+  # Example: PostgreSQL (if not using Supabase)
+  # postgres:
+  #   image: postgres:15
+  #   port: 5432
+  #   environment:
+  #     POSTGRES_DB: rankhub
+  #     POSTGRES_USER: ${DB_USER}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+
+# Backup configuration (if supported)
+backup:
+  enabled: false
+  # schedule: "0 2 * * *"  # Daily at 2 AM
+  # retention: 30d
+
+# Notes for deployment
+notes: |
+  RankHub v1 - Sistema de Gestão de Campeonatos de Esports
+  
+  Deployment checklist:
+  1. Configure all environment variables in Coolify UI
+  2. Set up custom domain and SSL
+  3. Configure Supabase CORS for your domain
+  4. Verify health check endpoint (/health)
+  5. Test application functionality after deployment
+  
+  Important:
+  - This application requires Supabase for backend services
+  - Ensure RLS policies are properly configured
+  - Monitor application logs for any issues
+  - The application serves static files via Nginx
+  
+  Support:
+  - Repository: https://github.com/smartexia/rankhub-esports-v1
+  - Documentation: See DEPLOY_COOLIFY.md
+  - Health Check: GET /health
