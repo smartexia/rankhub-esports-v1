@@ -2,9 +2,11 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
 # Install build dependencies and yarn
-RUN apk add --no-cache python3 make g++ yarn git
+RUN apk add --no-cache python3 make g++ yarn git curl
 # Copy package files
 COPY package*.json ./
+# Remove package-lock.json to avoid conflicts with yarn
+RUN rm -f package-lock.json
 # Remove npm completely and use only yarn
 RUN set -e && \
 # Remove npm to avoid conflicts
@@ -12,15 +14,18 @@ rm -rf /usr/local/bin/npm /usr/local/bin/npx && \
 # Clean all possible caches
 rm -rf ~/.npm ~/.yarn-cache ~/.cache && \
 rm -rf node_modules && \
-# Configure yarn with robust settings
-yarn config set registry https://registry.npmjs.org/ && \
-yarn config set network-timeout 600000 && \
+# Configure yarn with multiple registry fallbacks
+yarn config set network-timeout 300000 && \
 yarn config set network-concurrency 1 && \
-# Install dependencies using yarn only
-yarn install --frozen-lockfile --network-timeout 600000 --verbose || \
-yarn install --network-timeout 600000 --verbose && \
-# Verify installation
-yarn list --depth=0 || echo "Warning: Some packages may have issues but continuing..."
+yarn config set network-retry 10 && \
+# Try multiple registries as fallback
+(yarn config set registry https://registry.npmjs.org/ && yarn install --network-timeout 300000) || \
+(yarn config set registry https://registry.yarnpkg.com/ && yarn install --network-timeout 300000) || \
+(yarn config set registry https://npm.taobao.org/registry/ && yarn install --network-timeout 300000) || \
+(yarn config set registry https://registry.npmjs.org/ && yarn install --no-lockfile --network-timeout 300000) && \
+# Verify installation and install vite explicitly if missing
+(yarn list vite || yarn add vite@^5.4.19 --dev --network-timeout 300000) && \
+echo "Dependencies installed successfully"
 # Copy source code
 COPY . .
 # Build the application using yarn
