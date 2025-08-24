@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => ({
     sourcemap: mode === 'development',
     
     // Minification
-    minify: mode === 'production' ? 'terser' : false,
+    minify: mode === 'production' ? 'esbuild' : false,
     
     // Terser options for production
     ...(mode === 'production' && {

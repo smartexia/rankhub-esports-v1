@@ -22,7 +22,7 @@ export default defineConfig({
     sourcemap: false,
     
     // Minification
-    minify: 'terser',
+    minify: 'esbuild',
     
     // Terser options for better compression
     terserOptions: {
