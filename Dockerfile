@@ -9,11 +9,14 @@ RUN apk add --no-cache python3 make g++
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies with fallback strategies
+# Install dependencies with fallback strategies and network timeout handling
 RUN npm cache clean --force && \
-    (npm ci --no-audit --no-fund || npm install --no-audit --no-fund) && \
-    npm install vite --save-dev && \
-    npx vite --version
+    npm config set registry https://registry.npmjs.org/ && \
+    npm config set fetch-timeout 300000 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set fetch-retries 5 && \
+    (npm ci --no-audit --no-fund || npm install --no-audit --no-fund)
 
 # Copy source code
 COPY . .
