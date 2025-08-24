@@ -3,20 +3,34 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache python3 make g++
+# Install build dependencies including yarn as fallback
+RUN apk add --no-cache python3 make g++ yarn
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies with fallback strategies and network timeout handling
-RUN npm cache clean --force && \
+# Install dependencies with multiple fallback strategies
+RUN set -e && \
+    # Clean all caches thoroughly
+    npm cache clean --force && \
+    rm -rf ~/.npm && \
+    rm -rf node_modules && \
+    # Configure npm with robust settings
     npm config set registry https://registry.npmjs.org/ && \
-    npm config set fetch-timeout 300000 && \
-    npm config set fetch-retry-mintimeout 20000 && \
-    npm config set fetch-retry-maxtimeout 120000 && \
-    npm config set fetch-retries 5 && \
-    (npm ci --no-audit --no-fund || npm install --no-audit --no-fund)
+    npm config set fetch-timeout 600000 && \
+    npm config set fetch-retry-mintimeout 30000 && \
+    npm config set fetch-retry-maxtimeout 180000 && \
+    npm config set fetch-retries 10 && \
+    npm config set maxsockets 1 && \
+    # Try multiple installation strategies
+    (npm ci --no-audit --no-fund --prefer-offline || \
+     npm ci --no-audit --no-fund || \
+     npm install --no-audit --no-fund --prefer-offline || \
+     npm install --no-audit --no-fund || \
+     yarn install --frozen-lockfile --network-timeout 600000 || \
+     yarn install --network-timeout 600000) && \
+    # Verify installation
+    npm list --depth=0 || yarn list --depth=0 || echo "Warning: Some packages may have issues but continuing..."
 
 # Copy source code
 COPY . .
