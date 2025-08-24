@@ -1,0 +1,182 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* E-Sports Championship Management System Design System
+   Gamer aesthetic with dark blue base and neon accents
+   All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Gamer Color Palette */
+    --background: 210 30% 8%;
+    --foreground: 0 0% 98%;
+
+    --card: 210 25% 12%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 210 25% 10%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 348 100% 61%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 210 20% 18%;
+    --secondary-foreground: 0 0% 90%;
+
+    --muted: 210 15% 15%;
+    --muted-foreground: 210 10% 60%;
+
+    --accent: 160 100% 50%;
+    --accent-foreground: 210 30% 8%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --success: 160 100% 50%;
+    --success-foreground: 210 30% 8%;
+
+    --warning: 38 100% 50%;
+    --warning-foreground: 210 30% 8%;
+
+    --border: 210 15% 20%;
+    --input: 210 15% 15%;
+    --ring: 348 100% 61%;
+
+    --radius: 0.75rem;
+
+    /* Gamer-specific variables */
+    --neon-red: 348 100% 61%;
+    --neon-green: 160 100% 50%;
+    --dark-blue: 210 30% 8%;
+    --mid-blue: 210 25% 12%;
+    --light-blue: 210 20% 18%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--neon-red)), hsl(var(--primary) / 0.8));
+    --gradient-secondary: linear-gradient(135deg, hsl(var(--neon-green)), hsl(var(--accent) / 0.8));
+    --gradient-dark: linear-gradient(135deg, hsl(var(--background)), hsl(var(--mid-blue)));
+    --gradient-glow: linear-gradient(135deg, hsl(var(--neon-red) / 0.1), hsl(var(--neon-green) / 0.1));
+
+    /* Shadows & Effects */
+    --shadow-neon-red: 0 0 20px hsl(var(--neon-red) / 0.5);
+    --shadow-neon-green: 0 0 20px hsl(var(--neon-green) / 0.5);
+    --shadow-glow: 0 10px 30px -10px hsl(var(--primary) / 0.3);
+    --shadow-card: 0 8px 32px -8px hsl(210 30% 4% / 0.8);
+
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-rajdhani;
+    font-family: 'Rajdhani', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Orbitron', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 600;
+  }
+
+  /* Gamer components & utilities */
+  .glow-red {
+    box-shadow: var(--shadow-neon-red);
+  }
+  
+  .glow-green {
+    box-shadow: var(--shadow-neon-green);
+  }
+  
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+  
+  .gradient-secondary {
+    background: var(--gradient-secondary);
+  }
+  
+  .gradient-dark {
+    background: var(--gradient-dark);
+  }
+
+  .text-glow {
+    text-shadow: 0 0 10px currentColor;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 3s ease-in-out infinite;
+  }
+
+  @keyframes neon-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+  }
+
+  .animate-neon {
+    animation: neon-pulse 2s ease-in-out infinite;
+  }
+}
