@@ -1,0 +1,6 @@
+# Disable Nixpacks - Use Dockerfile instead
+[build]
+disable = true
+
+[variables]
+NODE_ENV = "production"

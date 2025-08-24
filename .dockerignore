@@ -151,7 +151,7 @@ deploy/
 scripts/deploy*
 
 # Coolify specific
-coolify.yml
+nixpacks.toml
 
 # Supabase local
 supabase/.branches

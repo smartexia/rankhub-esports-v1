@@ -1,0 +1,17 @@
+# Coolify Configuration
+# Force use of Dockerfile instead of Nixpacks
+
+buildpack=dockerfile
+dockerfile=Dockerfile
+port=80
+
+# Health check
+health_check_path=/health
+health_check_interval=30
+health_check_timeout=10
+health_check_retries=3
+
+# Build settings
+build_command=
+install_command=
+start_command=
