@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#16213e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff0040;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff6b35;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGrad)"/>
+  
+  <!-- Logo Circle -->
+  <circle cx="300" cy="315" r="80" fill="url(#logoGrad)" stroke="#fff" stroke-width="3"/>
+  
+  <!-- Crown/Trophy icon -->
+  <path d="M240 295 L250 275 L270 285 L280 265 L290 285 L310 275 L320 295 L310 305 L300 315 L260 315 L250 305 Z" fill="#fff" stroke="#fff" stroke-width="1"/>
+  
+  <!-- Gaming elements -->
+  <circle cx="270" cy="340" r="8" fill="#fff"/>
+  <circle cx="330" cy="340" r="8" fill="#fff"/>
+  
+  <!-- Ranking bars -->
+  <rect x="285" y="350" width="6" height="20" fill="#fff"/>
+  <rect x="295" y="340" width="6" height="30" fill="#fff"/>
+  <rect x="305" y="360" width="6" height="10" fill="#fff"/>
+  
+  <!-- Title -->
+  <text x="450" y="280" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="#fff">RankHub</text>
+  
+  <!-- Subtitle -->
+  <text x="450" y="340" font-family="Arial, sans-serif" font-size="36" fill="#ff6b35">Plataforma de E-Sports</text>
+  
+  <!-- Description -->
+  <text x="450" y="400" font-family="Arial, sans-serif" font-size="24" fill="#ccc">Gerencie times, jogadores e torneios</text>
+  <text x="450" y="440" font-family="Arial, sans-serif" font-size="24" fill="#ccc">com rankings em tempo real</text>
+</svg>
