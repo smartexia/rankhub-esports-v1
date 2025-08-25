@@ -1,11 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../integrations/supabase/client";
 import Layout from "../components/Layout";
-import { Button } from "../components/ui/button";
+import ChampionshipStatusManager from '../components/ChampionshipStatusManager';
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { useSupabaseRealtime } from "../hooks/useSupabaseRealtime";
+import { useToast } from "../hooks/use-toast";
 import {
   ArrowLeft,
   Trophy,
@@ -69,6 +72,11 @@ export default function Championship() {
   const [teamStats, setTeamStats] = useState<TeamStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
+  const { toast } = useToast();
+
+  const handleStatusChange = (newStatus: 'rascunho' | 'ativo' | 'finalizado') => {
+    setChampionship((prev) => (prev ? { ...prev, status: newStatus } : null));
+  };
 
   useEffect(() => {
     if (id) {
@@ -76,56 +84,64 @@ export default function Championship() {
     }
   }, [id]);
 
+  const handleChampionshipUpdate = useCallback(() => {
+    toast({
+      title: "Campeonato Atualizado",
+      description: "Os dados do campeonato foram atualizados em tempo real.",
+    });
+    fetchChampionshipData();
+  }, [id, toast]);
+
+  useSupabaseRealtime({
+    channel: `championship-details-${id}`,
+    table: 'championships',
+    filter: `id=eq.${id}`,
+    onUpdate: handleChampionshipUpdate,
+  });
+
   const fetchChampionshipData = async () => {
+    if (!id) return;
+
     try {
       setLoading(true);
 
-      // Fetch championship details
-      const { data: championshipData, error: championshipError } = await supabase
+      const {
+        data: championshipData,
+        error: championshipError
+      } = await supabase
         .from("championships")
-        .select("*")
+        .select("*",)
         .eq("id", id)
         .single();
 
-      if (championshipError) {
-        console.error("Error fetching championship:", championshipError);
+      if (championshipError || !championshipData) {
+        console.error("Erro ao buscar campeonato:", championshipError);
+        setChampionship(null);
+        setLoading(false);
         return;
       }
 
       setChampionship(championshipData);
 
-      // Fetch teams for this championship
-      const { data: teamsData, error: teamsError } = await supabase
-        .from("teams")
-        .select("*")
-        .eq("championship_id", id);
+      const [teamsResponse, matchesResponse] = await Promise.allSettled([
+        supabase.from("teams").select("*").eq("championship_id", id),
+        supabase.from("matches").select("*").eq("championship_id", id).order("ordem_queda", { ascending: true })
+      ]);
 
-      if (teamsError) {
-        console.error("Error fetching teams:", teamsError);
-      } else {
-        setTeams(teamsData || []);
-      }
+      const teamsData = teamsResponse.status === 'fulfilled' ? teamsResponse.value.data : [];
+      const matchesData = matchesResponse.status === 'fulfilled' ? matchesResponse.value.data : [];
 
-      // Fetch matches for this championship
-      const { data: matchesData, error: matchesError } = await supabase
-        .from("matches")
-        .select("*")
-        .eq("championship_id", id)
-        .order("ordem_queda", { ascending: true });
+      setTeams(teamsData || []);
+      setMatches(matchesData || []);
 
-      if (matchesError) {
-        console.error("Error fetching matches:", matchesError);
-      } else {
-        setMatches(matchesData || []);
-      }
-
-      // Calculate team statistics
       if (teamsData && matchesData) {
         const stats = calculateTeamStats(teamsData, matchesData);
         setTeamStats(stats);
       }
+
     } catch (error) {
-      console.error("Error in fetchChampionshipData:", error);
+      console.error("Erro inesperado ao carregar dados do campeonato:", error);
+      setChampionship(null);
     } finally {
       setLoading(false);
     }
@@ -214,15 +230,17 @@ export default function Championship() {
     <Layout title={championship.nome} description="Detalhes e estatísticas do campeonato">
       {/* Header */}
       <div className="bg-gradient-dark border-b border-border/50 -m-6 mb-6 p-6">
-        <div className="flex items-center gap-4 mb-4">
+        <div className="container mx-auto p-4 space-y-6">
+        <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => navigate("/championships")} className="p-2">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
             <h1 className="text-3xl font-orbitron font-bold text-glow">{championship.nome}</h1>
-            <p className="text-muted-foreground">Campeonato de e-sports</p>
+            <p className="text-sm text-gray-500 mt-1">De {championship.data_inicio ? new Date(championship.data_inicio).toLocaleDateString() : 'N/A'} a {championship.data_fim ? new Date(championship.data_fim).toLocaleDateString() : 'N/A'}</p>
           </div>
         </div>
+      </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="flex items-center gap-3 p-4 bg-card rounded-lg border border-border/50">
@@ -299,6 +317,13 @@ export default function Championship() {
 
       {/* Content */}
       <div className="space-y-6">
+        {championship && (
+          <ChampionshipStatusManager
+            championshipId={championship.id}
+            currentStatus={championship.status as 'rascunho' | 'ativo' | 'finalizado'}
+            onStatusChange={handleStatusChange}
+          />
+        )}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-3 lg:w-96">
             <TabsTrigger value="overview">Overview</TabsTrigger>

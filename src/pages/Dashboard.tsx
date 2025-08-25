@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Layout from "@/components/Layout";
+import { useSupabaseRealtime } from "@/hooks/useSupabaseRealtime";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -78,7 +79,7 @@ const Dashboard = () => {
       const matches = matchesResponse.status === 'fulfilled' ? matchesResponse.value.data : [];
       
       // Atualizar estatisticas
-      const activeChampionships = championships?.filter(c => c.status === 'active')?.length || 0;
+      const activeChampionships = championships?.filter(c => c.status === 'ativo')?.length || 0;
       
       setStats({
         totalChampionships: championships?.length || 0,
@@ -144,13 +145,24 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (user) {
       loadDashboardData();
     }
   }, [user, loadDashboardData]);
+
+  const handleChampionshipUpdate = useCallback(() => {
+    toast.info("O status de um campeonato foi atualizado. Recarregando o dashboard...");
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  useSupabaseRealtime({
+    channel: "championships-changes",
+    table: "championships",
+    onRecordUpdated: handleChampionshipUpdate,
+  });
 
   return (
     <Layout 

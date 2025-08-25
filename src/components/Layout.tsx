@@ -73,7 +73,7 @@ const Layout = ({ children, title, description }: LayoutProps) => {
     { id: "dashboard", label: "Dashboard", icon: Home, href: "/dashboard" },
     { id: "championships", label: "Campeonatos", icon: Trophy, href: "/championships" },
     { id: "teams", label: "Gerenciar Equipes", icon: Users, href: "/teams" },
-    { id: "players", label: "Jogadores", icon: User },
+    { id: "players", label: "Jogadores", icon: User, href: "/players" },
     { id: "matches", label: "Partidas", icon: Target },
     { id: "rankings", label: "Rankings", icon: Crown },
     { id: "stats", label: "Estatísticas Detalhadas", icon: BarChart3 },

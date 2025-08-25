@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit, Trash2, Users, Trophy, Target, Upload } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Users, Trophy, Target, Upload, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import Layout from '@/components/Layout';
+import TeamMembersManager from '@/components/TeamMembersManager';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Team {
   id: string;
@@ -43,6 +45,7 @@ interface Group {
 }
 
 const Teams = () => {
+  const { user } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
   const [championships, setChampionships] = useState<Championship[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -52,6 +55,8 @@ const Teams = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+  const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
+  const [selectedTeamForMembers, setSelectedTeamForMembers] = useState<Team | null>(null);
   const [formData, setFormData] = useState({
     nome_time: '',
     nome_line: '',
@@ -73,15 +78,46 @@ const Teams = () => {
   }, [formData.championship_id]);
 
   const fetchTeams = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     try {
-      const { data, error } = await supabase
+      // Buscar dados do usuário para verificar tenant e role
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('role, tenant_id')
+        .eq('auth_user_id', user.id)
+        .single();
+
+      if (userError) {
+        console.error('Erro ao buscar dados do usuário:', userError);
+        toast.error('Erro ao verificar permissões');
+        return;
+      }
+
+      // Se não é super admin e não tem tenant_id, não pode ver times
+      if (userData.role !== 'super_admin' && !userData.tenant_id) {
+        toast.error('Usuário não possui organização associada');
+        setTeams([]);
+        return;
+      }
+
+      let query = supabase
         .from('teams')
         .select(`
           *,
-          championship:championships(nome, status),
+          championship:championships(nome, status, tenant_id),
           group:groups(nome_grupo)
-        `)
-        .order('created_at', { ascending: false });
+        `);
+
+      // Se não é super admin, filtrar por tenant_id através do championship
+      if (userData.role !== 'super_admin') {
+        query = query.eq('championship.tenant_id', userData.tenant_id);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
       setTeams(data || []);
@@ -94,11 +130,31 @@ const Teams = () => {
   };
 
   const fetchChampionships = async () => {
+    if (!user) return;
+
     try {
-      const { data, error } = await supabase
+      // Buscar dados do usuário para verificar tenant e role
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('role, tenant_id')
+        .eq('auth_user_id', user.id)
+        .single();
+
+      if (userError) {
+        console.error('Erro ao buscar dados do usuário:', userError);
+        return;
+      }
+
+      let query = supabase
         .from('championships')
-        .select('id, nome, status')
-        .order('created_at', { ascending: false });
+        .select('id, nome, status, tenant_id');
+
+      // Se não é super admin, filtrar por tenant_id
+      if (userData.role !== 'super_admin') {
+        query = query.eq('tenant_id', userData.tenant_id);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
       setChampionships(data || []);
@@ -123,12 +179,49 @@ const Teams = () => {
   };
 
   const handleCreateTeam = async () => {
-    if (!formData.nome_time || !formData.nome_line || !formData.championship_id) {
+    if (!formData.nome_time || !formData.nome_line) {
       toast.error('Preencha todos os campos obrigatórios');
       return;
     }
 
+    if (!user) {
+      toast.error('Usuário não autenticado');
+      return;
+    }
+
     try {
+      // Verificar permissões do usuário
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('role, tenant_id')
+        .eq('auth_user_id', user.id)
+        .single();
+
+      if (userError) {
+        toast.error('Erro ao verificar permissões');
+        return;
+      }
+
+      // Verificar se o usuário pode criar times (manager, co_manager ou super_admin)
+      if (!['manager', 'co_manager', 'super_admin'].includes(userData.role)) {
+        toast.error('Você não tem permissão para criar times');
+        return;
+      }
+
+      // Verificar se o campeonato pertence ao tenant do usuário (exceto super_admin) - apenas se um campeonato foi selecionado
+      if (formData.championship_id && formData.championship_id !== 'none' && userData.role !== 'super_admin') {
+        const { data: championshipData, error: championshipError } = await supabase
+          .from('championships')
+          .select('tenant_id')
+          .eq('id', formData.championship_id)
+          .single();
+
+        if (championshipError || championshipData.tenant_id !== userData.tenant_id) {
+          toast.error('Você não pode criar times neste campeonato');
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('teams')
         .insert({
@@ -136,7 +229,7 @@ const Teams = () => {
           nome_line: formData.nome_line,
           tag: formData.tag || null,
           logo_url: formData.logo_url || null,
-          championship_id: formData.championship_id,
+          championship_id: formData.championship_id === 'none' ? null : formData.championship_id || null,
           group_id: formData.group_id || null
         });
 
@@ -153,12 +246,52 @@ const Teams = () => {
   };
 
   const handleEditTeam = async () => {
-    if (!editingTeam || !formData.nome_time || !formData.nome_line || !formData.championship_id) {
+    if (!editingTeam || !formData.nome_time || !formData.nome_line) {
       toast.error('Preencha todos os campos obrigatórios');
       return;
     }
 
+    if (!user) {
+      toast.error('Usuário não autenticado');
+      return;
+    }
+
     try {
+      // Verificar permissões do usuário
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('role, tenant_id')
+        .eq('auth_user_id', user.id)
+        .single();
+
+      if (userError) {
+        toast.error('Erro ao verificar permissões');
+        return;
+      }
+
+      // Verificar se o usuário pode editar times (manager, co_manager ou super_admin)
+      if (!['manager', 'co_manager', 'super_admin'].includes(userData.role)) {
+        toast.error('Você não tem permissão para editar times');
+        return;
+      }
+
+      // Verificar se o time pertence ao tenant do usuário (exceto super_admin)
+      if (userData.role !== 'super_admin') {
+        const { data: teamData, error: teamError } = await supabase
+          .from('teams')
+          .select(`
+            championship_id,
+            championships(tenant_id)
+          `)
+          .eq('id', editingTeam.id)
+          .single();
+
+        if (teamError || teamData.championships?.tenant_id !== userData.tenant_id) {
+          toast.error('Você não pode editar este time');
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('teams')
         .update({
@@ -166,7 +299,7 @@ const Teams = () => {
           nome_line: formData.nome_line,
           tag: formData.tag || null,
           logo_url: formData.logo_url || null,
-          championship_id: formData.championship_id,
+          championship_id: formData.championship_id === 'none' ? null : formData.championship_id || null,
           group_id: formData.group_id || null
         })
         .eq('id', editingTeam.id);
@@ -189,7 +322,47 @@ const Teams = () => {
       return;
     }
 
+    if (!user) {
+      toast.error('Usuário não autenticado');
+      return;
+    }
+
     try {
+      // Verificar permissões do usuário
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('role, tenant_id')
+        .eq('auth_user_id', user.id)
+        .single();
+
+      if (userError) {
+        toast.error('Erro ao verificar permissões');
+        return;
+      }
+
+      // Verificar se o usuário pode deletar times (manager, co_manager ou super_admin)
+      if (!['manager', 'co_manager', 'super_admin'].includes(userData.role)) {
+        toast.error('Você não tem permissão para excluir times');
+        return;
+      }
+
+      // Verificar se o time pertence ao tenant do usuário (exceto super_admin)
+      if (userData.role !== 'super_admin') {
+        const { data: teamData, error: teamError } = await supabase
+          .from('teams')
+          .select(`
+            championship_id,
+            championships(tenant_id)
+          `)
+          .eq('id', teamId)
+          .single();
+
+        if (teamError || teamData.championships?.tenant_id !== userData.tenant_id) {
+          toast.error('Você não pode excluir este time');
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('teams')
         .delete()
@@ -212,7 +385,7 @@ const Teams = () => {
       nome_line: team.nome_line,
       tag: team.tag || '',
       logo_url: team.logo_url || '',
-      championship_id: team.championship_id,
+      championship_id: team.championship_id || 'none',
       group_id: team.group_id || ''
     });
     setIsEditDialogOpen(true);
@@ -328,12 +501,13 @@ const Teams = () => {
                 </div>
                 
                 <div>
-                  <Label htmlFor="championship">Campeonato *</Label>
+                  <Label htmlFor="championship">Campeonato</Label>
                   <Select value={formData.championship_id} onValueChange={(value) => setFormData({ ...formData, championship_id: value, group_id: '' })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione um campeonato" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">Nenhum campeonato</SelectItem>
                       {championships.map((championship) => (
                         <SelectItem key={championship.id} value={championship.id}>
                           {championship.nome}
@@ -498,8 +672,21 @@ const Teams = () => {
                       <Button
                         variant="ghost"
                         size="sm"
+                        onClick={() => {
+                          setSelectedTeamForMembers(team);
+                          setIsMembersDialogOpen(true);
+                        }}
+                        className="h-8 w-8 p-0"
+                        title="Gerenciar Jogadores"
+                      >
+                        <UserPlus className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => openEditDialog(team)}
                         className="h-8 w-8 p-0"
+                        title="Editar Time"
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -508,6 +695,7 @@ const Teams = () => {
                         size="sm"
                         onClick={() => handleDeleteTeam(team.id)}
                         className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        title="Deletar Time"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -551,6 +739,23 @@ const Teams = () => {
             ))}
           </div>
         )}
+
+        {/* Team Members Dialog */}
+        <Dialog open={isMembersDialogOpen} onOpenChange={setIsMembersDialogOpen}>
+          <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="font-orbitron">
+                Gerenciar Jogadores - {selectedTeamForMembers?.nome_time}
+              </DialogTitle>
+            </DialogHeader>
+            {selectedTeamForMembers && (
+              <TeamMembersManager 
+                teamId={selectedTeamForMembers.id} 
+                teamName={selectedTeamForMembers.nome_time}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Edit Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -601,12 +806,13 @@ const Teams = () => {
               </div>
               
               <div>
-                <Label htmlFor="edit_championship">Campeonato *</Label>
+                <Label htmlFor="edit_championship">Campeonato</Label>
                 <Select value={formData.championship_id} onValueChange={(value) => setFormData({ ...formData, championship_id: value, group_id: '' })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione um campeonato" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Nenhum campeonato</SelectItem>
                     {championships.map((championship) => (
                       <SelectItem key={championship.id} value={championship.id}>
                         {championship.nome}

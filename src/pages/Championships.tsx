@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Plus, Search, Filter, Trophy, Calendar, Users } from "lucide-react";
+import { useSupabaseRealtime } from "@/hooks/useSupabaseRealtime";
 import { Database } from "@/integrations/supabase/types";
 import Layout from "@/components/Layout";
 
@@ -32,6 +33,16 @@ export default function Championships() {
     active: 0,
     upcoming: 0,
     finished: 0
+  });
+
+  useSupabaseRealtime<Championship>({
+    channelName: 'championships-changes',
+    tableName: 'championships',
+    onRecordUpdated: (payload) => {
+      console.log('Realtime update received in Championships:', payload);
+      toast.info("A lista de campeonatos foi atualizada.");
+      loadChampionships();
+    },
   });
 
   const loadChampionships = useCallback(async () => {
