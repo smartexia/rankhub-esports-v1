@@ -12,6 +12,7 @@ import Championships from "./pages/Championships";
 import Championship from "./pages/Championship";
 import Teams from "./pages/Teams";
 import Players from "./pages/Players";
+import Matches from "./pages/Matches";
 import SuperAdminPanel from "./pages/SuperAdminPanel";
 import NotFound from "./pages/NotFound";
 
@@ -50,6 +51,11 @@ const App = () => (
              <Route path="/players" element={
                <ProtectedRoute>
                  <Players />
+               </ProtectedRoute>
+             } />
+             <Route path="/matches" element={
+               <ProtectedRoute>
+                 <Matches />
                </ProtectedRoute>
              } />
              <Route path="/super-admin" element={

@@ -74,7 +74,7 @@ const Layout = ({ children, title, description }: LayoutProps) => {
     { id: "championships", label: "Campeonatos", icon: Trophy, href: "/championships" },
     { id: "teams", label: "Gerenciar Equipes", icon: Users, href: "/teams" },
     { id: "players", label: "Jogadores", icon: User, href: "/players" },
-    { id: "matches", label: "Partidas", icon: Target },
+    { id: "matches", label: "Partidas", icon: Target, href: "/matches" },
     { id: "rankings", label: "Rankings", icon: Crown },
     { id: "stats", label: "Estatísticas Detalhadas", icon: BarChart3 },
     { id: "settings", label: "Configurações", icon: Settings },
