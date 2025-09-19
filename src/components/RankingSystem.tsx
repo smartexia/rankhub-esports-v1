@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trophy, Medal, Award, TrendingUp, Users, Target, Filter, Layers, Calendar } from 'lucide-react';
+import { ExportButtons } from '@/components/ExportButtons';
 
 interface Team {
   id: string;
@@ -53,9 +54,10 @@ interface TeamStats {
 
 interface RankingSystemProps {
   championshipId: string;
+  championshipName?: string;
 }
 
-export default function RankingSystem({ championshipId }: RankingSystemProps) {
+export default function RankingSystem({ championshipId, championshipName = 'Campeonato' }: RankingSystemProps) {
   const [rankings, setRankings] = useState<TeamStats[]>([]);
   const [phases, setPhases] = useState<Phase[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -236,45 +238,6 @@ export default function RankingSystem({ championshipId }: RankingSystemProps) {
       console.log('🏆 RANKING: Top 3:', rankingsArray.slice(0, 3).map(r => ({ team: r.team.nome_time, points: r.totalPoints })));
 
       setRankings(rankingsArray);
-      
-      // 🎯 DEMO: Se não há dados reais, criar dados de exemplo para demonstração
-      if (rankingsArray.length === 0) {
-        console.log('📊 DEMO: Criando dados de exemplo para demonstração do ranking');
-        const demoTeams = [
-          { id: '1', nome_time: 'Team Alpha', nome_line: 'Alpha Gaming', tag: 'ALPHA', group_id: null },
-          { id: '2', nome_time: 'Beta Squad', nome_line: 'Beta Esports', tag: 'BETA', group_id: null },
-          { id: '3', nome_time: 'Gamma Force', nome_line: 'Gamma Pro', tag: 'GAMMA', group_id: null },
-          { id: '4', nome_time: 'Delta Warriors', nome_line: 'Delta Team', tag: 'DELTA', group_id: null },
-          { id: '5', nome_time: 'Epsilon Elite', nome_line: 'Epsilon Gaming', tag: 'EPS', group_id: null },
-          { id: '6', nome_time: 'Zeta Legends', nome_line: 'Zeta Esports', tag: 'ZETA', group_id: null },
-          { id: '7', nome_time: 'Theta Storm', nome_line: 'Theta Pro', tag: 'THETA', group_id: null },
-          { id: '8', nome_time: 'Omega Champions', nome_line: 'Omega Gaming', tag: 'OMEGA', group_id: null }
-        ];
-        
-        const demoRankings: TeamStats[] = demoTeams.map((team, index) => {
-          const basePoints = 150 - (index * 15); // Pontos decrescentes
-          const variation = Math.floor(Math.random() * 20) - 10; // Variação aleatória
-          const totalPoints = Math.max(basePoints + variation, 10);
-          const matchesPlayed = 3 + Math.floor(Math.random() * 2); // 3-4 partidas
-          const totalKills = Math.floor(totalPoints * 0.3) + Math.floor(Math.random() * 10);
-          const wins = Math.floor(matchesPlayed * (totalPoints / 200)); // Proporção de vitórias
-          
-          return {
-            team,
-            totalPoints,
-            totalKills,
-            matchesPlayed,
-            averagePosition: Math.max(1, Math.floor(20 - (totalPoints / 10))),
-            bestPosition: Math.max(1, Math.floor(Math.random() * 5) + 1),
-            worstPosition: Math.min(20, Math.floor(Math.random() * 10) + 10),
-            wins,
-            topFive: Math.min(matchesPlayed, wins + 1)
-          };
-        }).sort((a, b) => b.totalPoints - a.totalPoints);
-        
-        setRankings(demoRankings);
-        console.log('🏆 DEMO: Rankings de exemplo criados:', demoRankings.length);
-      }
     } catch (error) {
       console.error('Erro inesperado ao carregar rankings:', error);
     } finally {
@@ -345,8 +308,9 @@ export default function RankingSystem({ championshipId }: RankingSystemProps) {
           </div>
         </div>
 
-        {/* Filtros */}
-        <div className="flex flex-wrap items-center gap-4 p-4 bg-card rounded-lg border">
+        {/* Filtros e Exportação */}
+        <div className="flex flex-col gap-4 p-4 bg-card rounded-lg border">
+          <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Filtros:</span>
@@ -414,10 +378,20 @@ export default function RankingSystem({ championshipId }: RankingSystemProps) {
               </SelectContent>
             </Select>
           </div>
+          </div>
+          
+          {/* Botões de Exportação */}
+          <div className="border-t pt-4">
+            <ExportButtons 
+              championshipName={championshipName}
+              rankingElementId="ranking-content"
+            />
+          </div>
         </div>
       </div>
 
       {/* Ranking Content */}
+      <div id="ranking-content">
       {rankings.length > 0 ? (
         <Tabs defaultValue="geral" className="space-y-4">
           <TabsList className="grid w-full grid-cols-2">
@@ -517,7 +491,12 @@ export default function RankingSystem({ championshipId }: RankingSystemProps) {
                   const { icon: Icon, color } = getPositionIcon(index + 1);
                   
                   return (
-                    <div key={stats.team.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-card to-card/80 rounded-xl border border-primary/10 hover:border-primary/30 transition-all duration-300 hover:shadow-lg">
+                    <div 
+                      key={stats.team.id} 
+                      className="flex items-center justify-between p-4 bg-gradient-to-r from-card to-card/80 rounded-xl border border-primary/10 hover:border-primary/30 transition-all duration-300 hover:shadow-lg"
+                      data-ranking-row
+                      data-position={index + 1}
+                    >
                       <div className="flex items-center gap-4">
                         <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-primary/20 to-primary/10 rounded-xl border border-primary/20">
                           <div className="flex items-center gap-1">
@@ -526,7 +505,7 @@ export default function RankingSystem({ championshipId }: RankingSystemProps) {
                           </div>
                         </div>
                         <div>
-                          <h3 className="font-bold text-2xl">{stats.team.nome_time}</h3>
+                          <h3 className="font-bold text-2xl" data-team-name>{stats.team.nome_time}</h3>
                           <p className="text-sm text-muted-foreground/80">{stats.team.nome_line}</p>
                           {stats.team.tag && (
                             <Badge variant="outline" className="text-xs mt-1 bg-primary/10 border-primary/20">
@@ -538,7 +517,7 @@ export default function RankingSystem({ championshipId }: RankingSystemProps) {
                       
                       <div className="flex items-center gap-8">
                         <div className="text-center">
-                          <p className="text-3xl font-bold text-primary">{stats.totalPoints}</p>
+                          <p className="text-3xl font-bold text-primary" data-team-points>{stats.totalPoints}</p>
                           <p className="text-xs text-muted-foreground">Pontos</p>
                         </div>
                         <div className="text-center">
@@ -635,6 +614,7 @@ export default function RankingSystem({ championshipId }: RankingSystemProps) {
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   );
 }

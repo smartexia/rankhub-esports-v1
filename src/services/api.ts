@@ -284,3 +284,51 @@ export const getChampionshipRanking = async (championshipId: string) => {
     
   return { data, error };
 };
+
+// ===== CHAMPIONSHIP MANAGEMENT API =====
+
+/**
+ * Delete a championship
+ * @param championshipId - Championship ID to delete
+ * @returns Promise with deletion result
+ */
+export const deleteChampionship = async (championshipId: string) => {
+  try {
+    // Verificar se o usuário está autenticado
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      throw new Error('Usuário não autenticado');
+    }
+
+    console.log('🔐 USUÁRIO AUTENTICADO: Deletando campeonato', {
+      userId: user.id,
+      userEmail: user.email,
+      championshipId
+    });
+
+    // Executar delete do campeonato
+    const { data, error } = await supabase
+      .from('championships')
+      .delete()
+      .eq('id', championshipId)
+      .select();
+
+    if (error) {
+      console.error('❌ ERRO: Falha ao deletar campeonato:', error);
+      throw new Error('Erro ao deletar campeonato: ' + error.message);
+    }
+
+    console.log('✅ SUCESSO: Campeonato deletado com sucesso:', data);
+    return { data, error: null };
+    
+  } catch (error) {
+    console.error('❌ ERRO CRÍTICO em deleteChampionship:', error);
+    return { 
+      data: null, 
+      error: { 
+        message: error instanceof Error ? error.message : 'Erro ao deletar campeonato'
+      } 
+    };
+  }
+};

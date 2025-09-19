@@ -141,8 +141,8 @@ export default function TeamManagement({ championshipId }: TeamManagementProps) 
 
   // Criar time
   const createTeam = async () => {
-    if (!newTeam.nome_time || !newTeam.nome_line) {
-      toast.error('Preencha todos os campos obrigatórios');
+    if (!newTeam.nome_time) {
+      toast.error('Preencha o nome do time');
       return;
     }
 
@@ -154,11 +154,14 @@ export default function TeamManagement({ championshipId }: TeamManagementProps) 
         finalTag = `EQUIPE${nextNumber}`;
       }
 
+      // Se nome_line estiver vazio, usar o nome_time
+      const finalNomeLine = newTeam.nome_line || newTeam.nome_time;
+
       const { error } = await supabase
         .from('teams')
         .insert({
           nome_time: newTeam.nome_time,
-          nome_line: newTeam.nome_line,
+          nome_line: finalNomeLine,
           tag: finalTag,
           championship_id: championshipId
         });
@@ -516,7 +519,7 @@ export default function TeamManagement({ championshipId }: TeamManagementProps) 
               />
             </div>
             <div>
-              <Label htmlFor="nome_line">Nome da Line *</Label>
+              <Label htmlFor="nome_line">Nome da Line</Label>
               <Input
                 id="nome_line"
                 value={newTeam.nome_line}

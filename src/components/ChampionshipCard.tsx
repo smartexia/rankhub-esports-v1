@@ -1,7 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Trophy, Users, Calendar, Zap } from "lucide-react";
+import { Trophy, Users, Calendar, Zap, Trash2 } from "lucide-react";
+import { deleteChampionship } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 interface Championship {
   id: string;
@@ -10,6 +13,8 @@ interface Championship {
   status: "active" | "upcoming" | "finished";
   teams: number;
   maxTeams: number;
+  participantLabel?: string;
+  gameMode?: string;
   startDate: string;
   endDate?: string;
   organizer: string;
@@ -18,10 +23,13 @@ interface Championship {
 interface ChampionshipCardProps {
   championship: Championship;
   onView: (id: string) => void;
+  onDelete?: (id: string) => void;
   isManager?: boolean;
 }
 
-export function ChampionshipCard({ championship, onView, isManager }: ChampionshipCardProps) {
+export function ChampionshipCard({ championship, onView, onDelete, isManager }: ChampionshipCardProps) {
+  const { toast } = useToast();
+  const [isDeleting, setIsDeleting] = useState(false);
   const getStatusColor = (status: Championship["status"]) => {
     switch (status) {
       case "active":
@@ -43,6 +51,65 @@ export function ChampionshipCard({ championship, onView, isManager }: Championsh
         return <Calendar className="h-3 w-3" />;
       case "finished":
         return <Trophy className="h-3 w-3" />;
+    }
+  };
+
+  const handleDelete = async () => {
+    // Confirmação dupla para segurança
+    const confirmDelete = window.confirm(
+      `⚠️ ATENÇÃO: Você está prestes a deletar o campeonato "${championship.name}".\n\n` +
+      `Esta ação é IRREVERSÍVEL e irá remover:\n` +
+      `• Todas as partidas do campeonato\n` +
+      `• Todos os resultados e rankings\n` +
+      `• Todas as evidências (prints)\n\n` +
+      `Tem certeza que deseja continuar?`
+    );
+
+    if (!confirmDelete) return;
+
+    const finalConfirm = window.confirm(
+      `🚨 CONFIRMAÇÃO FINAL\n\n` +
+      `Campeonato: ${championship.name}\n` +
+      `Esta é sua última chance de cancelar.\n\n` +
+      `Deletar definitivamente?`
+    );
+
+    if (!finalConfirm) return;
+
+    try {
+      setIsDeleting(true);
+      
+      const { error } = await deleteChampionship(championship.id);
+      
+      if (error) {
+        toast({
+          title: "Erro ao Deletar",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Campeonato Deletado",
+        description: `O campeonato "${championship.name}" foi deletado com sucesso.`,
+        variant: "default",
+      });
+
+      // Chamar callback se fornecido
+      if (onDelete) {
+        onDelete(championship.id);
+      }
+      
+    } catch (error) {
+      console.error('Erro ao deletar campeonato:', error);
+      toast({
+        title: "Erro Inesperado",
+        description: "Ocorreu um erro inesperado ao deletar o campeonato.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -72,7 +139,7 @@ export function ChampionshipCard({ championship, onView, isManager }: Championsh
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Users className="h-4 w-4 text-accent" />
-            <span>{championship.teams}/{championship.maxTeams} Teams</span>
+            <span>{championship.teams}/{championship.maxTeams} {championship.participantLabel || 'Teams'}</span>
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4 text-primary" />
@@ -87,14 +154,27 @@ export function ChampionshipCard({ championship, onView, isManager }: Championsh
       </CardContent>
 
       <CardFooter className="relative z-10">
-        <Button 
-          variant="gamer" 
-          className="w-full" 
-          onClick={() => onView(championship.id)}
-        >
-          <Trophy className="h-4 w-4" />
-          View Details
-        </Button>
+        <div className="flex gap-2 w-full">
+          <Button 
+            variant="gamer" 
+            className="flex-1" 
+            onClick={() => onView(championship.id)}
+          >
+            <Trophy className="h-4 w-4" />
+            View Details
+          </Button>
+          
+          <Button 
+             variant="destructive" 
+             size="icon"
+             onClick={handleDelete}
+             disabled={isDeleting}
+             className="shrink-0 hover:bg-red-600 transition-colors"
+             title="Deletar Campeonato"
+           >
+             <Trash2 className="h-4 w-4" />
+           </Button>
+        </div>
       </CardFooter>
     </Card>
   );

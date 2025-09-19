@@ -14,6 +14,7 @@ import Layout from '@/components/Layout';
 import TeamMembersManager from '@/components/TeamMembersManager';
 import { useAuth } from '@/hooks/useAuth';
 
+
 interface Team {
   id: string;
   nome_time: string;
@@ -65,6 +66,8 @@ const Teams = () => {
     championship_id: '',
     group_id: ''
   });
+
+
 
   useEffect(() => {
     fetchTeams();
@@ -179,8 +182,8 @@ const Teams = () => {
   };
 
   const handleCreateTeam = async () => {
-    if (!formData.nome_time || !formData.nome_line) {
-      toast.error('Preencha todos os campos obrigatórios');
+    if (!formData.nome_time) {
+      toast.error('Preencha o nome do time');
       return;
     }
 
@@ -233,7 +236,7 @@ const Teams = () => {
         .from('teams')
         .insert({
           nome_time: formData.nome_time,
-          nome_line: formData.nome_line,
+          nome_line: formData.nome_line || formData.nome_time,
           tag: finalTag,
           logo_url: formData.logo_url || null,
           championship_id: formData.championship_id === 'none' ? null : formData.championship_id || null,
@@ -253,8 +256,8 @@ const Teams = () => {
   };
 
   const handleEditTeam = async () => {
-    if (!editingTeam || !formData.nome_time || !formData.nome_line) {
-      toast.error('Preencha todos os campos obrigatórios');
+    if (!editingTeam || !formData.nome_time) {
+      toast.error('Preencha o nome do time');
       return;
     }
 
@@ -303,7 +306,7 @@ const Teams = () => {
         .from('teams')
         .update({
           nome_time: formData.nome_time,
-          nome_line: formData.nome_line,
+          nome_line: formData.nome_line || formData.nome_time,
           tag: formData.tag || null,
           logo_url: formData.logo_url || null,
           championship_id: formData.championship_id === 'none' ? null : formData.championship_id || null,
@@ -477,12 +480,12 @@ const Teams = () => {
                 </div>
                 
                 <div>
-                  <Label htmlFor="nome_line">Nome da Line *</Label>
+                  <Label htmlFor="nome_line">Nome da Line</Label>
                   <Input
                     id="nome_line"
                     value={formData.nome_line}
                     onChange={(e) => setFormData({ ...formData, nome_line: e.target.value })}
-                    placeholder="Ex: Alpha Squad"
+                    placeholder="Ex: Alpha Squad (opcional)"
                   />
                 </div>
                 
@@ -509,7 +512,9 @@ const Teams = () => {
                 
                 <div>
                   <Label htmlFor="championship">Campeonato</Label>
-                  <Select value={formData.championship_id} onValueChange={(value) => setFormData({ ...formData, championship_id: value, group_id: '' })}>
+                  <Select value={formData.championship_id} onValueChange={(value) => {
+                    setFormData({ ...formData, championship_id: value, group_id: '' });
+                  }}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione um campeonato" />
                     </SelectTrigger>
@@ -782,12 +787,12 @@ const Teams = () => {
               </div>
               
               <div>
-                <Label htmlFor="edit_nome_line">Nome da Line *</Label>
+                <Label htmlFor="edit_nome_line">Nome da Line</Label>
                 <Input
                   id="edit_nome_line"
                   value={formData.nome_line}
                   onChange={(e) => setFormData({ ...formData, nome_line: e.target.value })}
-                  placeholder="Ex: Alpha Squad"
+                  placeholder="Ex: Alpha Squad (opcional)"
                 />
               </div>
               

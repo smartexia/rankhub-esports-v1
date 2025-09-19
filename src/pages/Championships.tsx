@@ -130,6 +130,14 @@ export default function Championships() {
     navigate(`/championship/${id}`);
   };
 
+  const handleDeleteChampionship = (id: string) => {
+    // Remover o campeonato da lista local após delete bem-sucedido
+    setChampionships(prev => prev.filter(championship => championship.id !== id));
+    
+    // Recarregar estatísticas
+    loadChampionships();
+  };
+
   const filteredChampionships = championships.filter(championship => {
     const matchesSearch = championship.nome.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || championship.status === statusFilter;
@@ -149,18 +157,38 @@ export default function Championships() {
     }
   };
 
-  const convertToChampionshipCardFormat = (championship: Championship) => ({
-    id: championship.id,
-    name: championship.nome,
-    description: `Campeonato ${championship.status}`,
-    status: championship.status === "ativo" ? "active" as const : 
-            championship.status === "rascunho" ? "upcoming" as const : "finished" as const,
-    teams: championship.teams_count || 0,
-    maxTeams: 20, // Valor padrão, pode ser configurável
-    startDate: championship.data_inicio || new Date().toISOString(),
-    endDate: championship.data_fim || undefined,
-    organizer: "Organizador" // Pode ser obtido do tenant
-  });
+  // Função helper para determinar informações de participantes baseado no tipo
+  const getParticipantInfo = (gameMode: string | null | undefined) => {
+    switch(gameMode?.toLowerCase()) {
+      case 'squad':
+        return { label: 'Squads', max: 25 };
+      case 'duplas':
+        return { label: 'Players', max: 50 }; // 25 duplas = 50 players
+      case 'individual':
+        return { label: 'Players', max: 100 };
+      default:
+        return { label: 'Teams', max: 20 }; // Fallback padrão
+    }
+  };
+
+  const convertToChampionshipCardFormat = (championship: Championship) => {
+    const participantInfo = getParticipantInfo(championship.tipo_campeonato);
+    
+    return {
+      id: championship.id,
+      name: championship.nome,
+      description: `Campeonato ${championship.status}`,
+      status: championship.status === "ativo" ? "active" as const : 
+              championship.status === "rascunho" ? "upcoming" as const : "finished" as const,
+      teams: championship.teams_count || 0,
+      maxTeams: participantInfo.max,
+      participantLabel: participantInfo.label,
+      gameMode: championship.tipo_campeonato,
+      startDate: championship.data_inicio || new Date().toISOString(),
+      endDate: championship.data_fim || undefined,
+      organizer: "Organizador" // Pode ser obtido do tenant
+    };
+  };
 
   return (
     <Layout 
@@ -305,6 +333,7 @@ export default function Championships() {
                 key={championship.id}
                 championship={convertToChampionshipCardFormat(championship)}
                 onView={handleViewChampionship}
+                onDelete={handleDeleteChampionship}
                 isManager={user?.role === "manager" || user?.role === "super_admin"}
               />
             ))}

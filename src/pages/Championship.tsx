@@ -437,9 +437,21 @@ export default function Championship() {
             <Button variant="ghost" onClick={() => navigate("/championships")} className="p-2">
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div>
-              <h1 className="text-3xl font-orbitron font-bold text-glow">{championship.nome}</h1>
-              <p className="text-sm text-gray-500 mt-1">De {championship.data_inicio ? new Date(championship.data_inicio).toLocaleDateString() : 'N/A'} a {championship.data_fim ? new Date(championship.data_fim).toLocaleDateString() : 'N/A'}</p>
+            <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
+              <div>
+                <h1 className="text-3xl font-orbitron font-bold text-glow">{championship.nome}</h1>
+                <p className="text-sm text-gray-500 mt-1">De {championship.data_inicio ? new Date(championship.data_inicio).toLocaleDateString() : 'N/A'} a {championship.data_fim ? new Date(championship.data_fim).toLocaleDateString() : 'N/A'}</p>
+              </div>
+              {/* Card Times Cadastrados integrado no header */}
+              <div className="flex items-center gap-3 p-3 lg:p-4 bg-card rounded-lg border border-border/50 hover:border-primary/50 transition-colors">
+                <div className="bg-primary/20 rounded-full p-2">
+                  <Trophy className="h-5 w-5 lg:h-6 lg:w-6 text-primary" />
+                </div>
+                <div>
+                  <p className="text-xs lg:text-sm text-muted-foreground">Times Cadastrados</p>
+                  <p className="text-xl lg:text-2xl font-bold">{teams.length}</p>
+                </div>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -451,47 +463,7 @@ export default function Championship() {
         </div>
       </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="flex items-center gap-3 p-4 bg-card rounded-lg border border-border/50 hover:border-primary/50 transition-colors">
-            <div className="bg-primary/20 rounded-full p-2">
-              <Trophy className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Times</p>
-              <p className="text-2xl font-bold">{teams.length}</p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-3 p-4 bg-card rounded-lg border border-border/50 hover:border-red-500/50 transition-colors">
-            <div className="bg-red-500/20 rounded-full p-2">
-              <Camera className="h-6 w-6 text-red-500" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Aguardando Prints</p>
-              <p className="text-2xl font-bold text-red-500">{matchesAwaitingPrints.length}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 p-4 bg-card rounded-lg border border-border/50 hover:border-yellow-500/50 transition-colors">
-            <div className="bg-yellow-500/20 rounded-full p-2">
-              <Eye className="h-6 w-6 text-yellow-500" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Em Análise</p>
-              <p className="text-2xl font-bold text-yellow-500">{matchesInAnalysis.length}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 p-4 bg-card rounded-lg border border-border/50 hover:border-green-500/50 transition-colors">
-            <div className="bg-green-500/20 rounded-full p-2">
-              <CheckCircle className="h-6 w-6 text-green-500" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Finalizadas</p>
-              <p className="text-2xl font-bold text-green-500">{completedMatchesWithResults.length}</p>
-            </div>
-          </div>
-        </div>
 
         {/* Ações Rápidas */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -688,7 +660,10 @@ export default function Championship() {
           </TabsContent>
 
           <TabsContent value="ranking" className="space-y-6">
-            <RankingSystem championshipId={championship.id} />
+            <RankingSystem 
+              championshipId={championship.id} 
+              championshipName={championship.nome}
+            />
           </TabsContent>
 
           <TabsContent value="matches" className="space-y-6">
