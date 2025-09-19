@@ -11,8 +11,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Eye, Edit, Trash2, Plus, Filter, Search } from 'lucide-react';
+import { Upload, Eye, Edit, Trash2, Plus, Filter, Search, FileImage } from 'lucide-react';
 import { Tables } from '@/integrations/supabase/types';
+import RankingBatchProcessor from '@/components/RankingBatchProcessor';
 
 type Match = Tables<'matches'>;
 type MatchStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
@@ -28,6 +29,8 @@ const Matches = () => {
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [resultDescription, setResultDescription] = useState('');
+  const [showRankingProcessor, setShowRankingProcessor] = useState(false);
+  const [processingMatch, setProcessingMatch] = useState<Match | null>(null);
 
   useEffect(() => {
     fetchMatches();
@@ -137,6 +140,49 @@ const Matches = () => {
       toast({
         title: 'Erro',
         description: 'Não foi possível enviar o resultado.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleRankingResultsProcessed = async (results: any[]) => {
+    if (!processingMatch) return;
+
+    try {
+      // Salvar cada resultado no banco de dados
+      for (const result of results) {
+        const { error: resultError } = await supabase
+          .from('results')
+          .insert({
+            match_id: processingMatch.id,
+            description: `Ranking processado: ${result.team} - ${result.points} pontos (Posição: ${result.position})`,
+            submitted_by: user!.id
+          });
+
+        if (resultError) throw resultError;
+      }
+
+      // Atualizar status da partida para finalizada
+      const { error: matchError } = await supabase
+        .from('matches')
+        .update({ status: 'completed' })
+        .eq('id', processingMatch.id);
+
+      if (matchError) throw matchError;
+
+      toast({
+        title: 'Sucesso',
+        description: `${results.length} resultados de ranking processados com sucesso!`,
+      });
+
+      setShowRankingProcessor(false);
+      setProcessingMatch(null);
+      fetchMatches();
+    } catch (error) {
+      console.error('Erro ao salvar resultados:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível salvar os resultados processados.',
         variant: 'destructive',
       });
     }
@@ -257,13 +303,25 @@ const Matches = () => {
                         variant="outline"
                         size="sm"
                         onClick={() => {
+                          setProcessingMatch(match);
+                          setShowRankingProcessor(true);
+                        }}
+                        disabled={match.status === 'completed' || match.status === 'cancelled'}
+                      >
+                        <FileImage className="h-4 w-4 mr-1" />
+                        Processar Rankings
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
                           setSelectedMatch(match);
                           setUploadDialogOpen(true);
                         }}
                         disabled={match.status === 'completed' || match.status === 'cancelled'}
                       >
                         <Upload className="h-4 w-4 mr-1" />
-                        Upload Resultado
+                        Upload Manual
                       </Button>
                       <Button variant="outline" size="sm">
                         <Eye className="h-4 w-4 mr-1" />
@@ -277,11 +335,11 @@ const Matches = () => {
           )}
         </div>
 
-        {/* Dialog de Upload de Resultado */}
+        {/* Dialog de Upload Manual */}
         <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Upload de Resultado</DialogTitle>
+              <DialogTitle>Upload Manual de Resultado</DialogTitle>
               <DialogDescription>
                 Envie o resultado da partida {selectedMatch?.team1?.name} vs {selectedMatch?.team2?.name}
               </DialogDescription>
@@ -317,6 +375,24 @@ const Matches = () => {
                 </Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog de Processamento de Rankings */}
+        <Dialog open={showRankingProcessor} onOpenChange={setShowRankingProcessor}>
+          <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Processar Rankings da Partida</DialogTitle>
+              <DialogDescription>
+                Partida: {processingMatch?.team1?.name} vs {processingMatch?.team2?.name}
+                <br />
+                Faça upload de múltiplas imagens de ranking para processar automaticamente os resultados.
+              </DialogDescription>
+            </DialogHeader>
+            <RankingBatchProcessor
+              onResultsProcessed={handleRankingResultsProcessed}
+              onCancel={() => setShowRankingProcessor(false)}
+            />
           </DialogContent>
         </Dialog>
       </div>

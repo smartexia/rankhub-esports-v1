@@ -18,11 +18,10 @@ interface Championship {
 interface ChampionshipCardProps {
   championship: Championship;
   onView: (id: string) => void;
-  onJoin?: (id: string) => void;
   isManager?: boolean;
 }
 
-export function ChampionshipCard({ championship, onView, onJoin, isManager }: ChampionshipCardProps) {
+export function ChampionshipCard({ championship, onView, isManager }: ChampionshipCardProps) {
   const getStatusColor = (status: Championship["status"]) => {
     switch (status) {
       case "active":
@@ -87,24 +86,15 @@ export function ChampionshipCard({ championship, onView, onJoin, isManager }: Ch
         </div>
       </CardContent>
 
-      <CardFooter className="relative z-10 flex gap-2">
+      <CardFooter className="relative z-10">
         <Button 
           variant="gamer" 
-          className="flex-1" 
+          className="w-full" 
           onClick={() => onView(championship.id)}
         >
           <Trophy className="h-4 w-4" />
           View Details
         </Button>
-        
-        {!isManager && championship.status !== "finished" && championship.teams < championship.maxTeams && (
-          <Button 
-            variant="secondary" 
-            onClick={() => onJoin?.(championship.id)}
-          >
-            Join
-          </Button>
-        )}
       </CardFooter>
     </Card>
   );

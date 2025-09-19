@@ -222,12 +222,19 @@ const Teams = () => {
         }
       }
 
+      // Gerar tag automaticamente se não especificada
+      let finalTag = formData.tag;
+      if (!finalTag) {
+        const nextNumber = teams.length + 1;
+        finalTag = `EQUIPE${nextNumber}`;
+      }
+
       const { error } = await supabase
         .from('teams')
         .insert({
           nome_time: formData.nome_time,
           nome_line: formData.nome_line,
-          tag: formData.tag || null,
+          tag: finalTag,
           logo_url: formData.logo_url || null,
           championship_id: formData.championship_id === 'none' ? null : formData.championship_id || null,
           group_id: formData.group_id || null

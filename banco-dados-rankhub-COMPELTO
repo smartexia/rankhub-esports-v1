@@ -1,0 +1,143 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.championships (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  tenant_id uuid NOT NULL,
+  nome text NOT NULL,
+  regras_pontuacao jsonb DEFAULT '{"kill": 1, "posicao": {"1": 20, "2": 15, "3": 12, "4": 10, "5": 8, "6": 6, "7": 5, "8": 4, "9": 3, "10": 2}}'::jsonb,
+  status USER-DEFINED DEFAULT 'rascunho'::championship_status,
+  data_inicio timestamp with time zone,
+  data_fim timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  descricao text,
+  premiacao text,
+  horario_inicio time without time zone,
+  tipo_campeonato text DEFAULT 'individual'::text CHECK (tipo_campeonato = ANY (ARRAY['individual'::text, 'duplas'::text, 'trios'::text, 'squad'::text])),
+  formato_torneio text DEFAULT 'simples'::text,
+  numero_fases integer DEFAULT 1,
+  configuracao_fases jsonb,
+  numero_grupos integer DEFAULT 1,
+  times_por_grupo integer DEFAULT 25,
+  configuracao_avancada jsonb DEFAULT '{}'::jsonb,
+  CONSTRAINT championships_pkey PRIMARY KEY (id),
+  CONSTRAINT championships_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
+);
+CREATE TABLE public.groups (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  championship_id uuid NOT NULL,
+  nome_grupo text NOT NULL,
+  capacidade_times integer DEFAULT 25,
+  created_at timestamp with time zone DEFAULT now(),
+  phase_id uuid,
+  data_jogos ARRAY,
+  configuracao_grupo jsonb,
+  status_grupo text DEFAULT 'pendente'::text CHECK (status_grupo = ANY (ARRAY['pendente'::text, 'ativo'::text, 'concluido'::text, 'cancelado'::text])),
+  ordem_grupo integer DEFAULT 1,
+  CONSTRAINT groups_pkey PRIMARY KEY (id),
+  CONSTRAINT groups_championship_id_fkey FOREIGN KEY (championship_id) REFERENCES public.championships(id),
+  CONSTRAINT groups_phase_id_fkey FOREIGN KEY (phase_id) REFERENCES public.tournament_phases(id)
+);
+CREATE TABLE public.match_prints (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  match_id uuid,
+  image_url text NOT NULL,
+  processing_status USER-DEFINED DEFAULT 'pending'::processing_status,
+  gemini_result jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  tenant_id uuid,
+  CONSTRAINT match_prints_pkey PRIMARY KEY (id),
+  CONSTRAINT match_prints_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id),
+  CONSTRAINT match_prints_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
+);
+CREATE TABLE public.matches (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  group_id uuid,
+  championship_id uuid NOT NULL,
+  ordem_queda integer NOT NULL,
+  data_hora_queda timestamp with time zone DEFAULT now(),
+  status USER-DEFINED DEFAULT 'pendente'::match_status,
+  created_at timestamp with time zone DEFAULT now(),
+  phase_id uuid,
+  tipo_partida text DEFAULT 'queda'::text CHECK (tipo_partida = ANY (ARRAY['queda'::text, 'eliminatoria'::text, 'final'::text, 'playoff'::text])),
+  configuracao_partida jsonb DEFAULT '{}'::jsonb,
+  CONSTRAINT matches_pkey PRIMARY KEY (id),
+  CONSTRAINT matches_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.groups(id),
+  CONSTRAINT matches_championship_id_fkey FOREIGN KEY (championship_id) REFERENCES public.championships(id),
+  CONSTRAINT matches_phase_id_fkey FOREIGN KEY (phase_id) REFERENCES public.tournament_phases(id)
+);
+CREATE TABLE public.print_evidence (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  match_id uuid NOT NULL,
+  url_imagem text NOT NULL,
+  uploaded_by uuid,
+  data_upload timestamp with time zone DEFAULT now(),
+  status_processamento USER-DEFINED DEFAULT 'pendente'::print_status,
+  confidence_score numeric,
+  ai_extracted_data jsonb,
+  CONSTRAINT print_evidence_pkey PRIMARY KEY (id),
+  CONSTRAINT print_evidence_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id),
+  CONSTRAINT print_evidence_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.users(id)
+);
+CREATE TABLE public.results (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  match_id uuid NOT NULL,
+  team_id uuid NOT NULL,
+  posicao_final integer,
+  kills integer DEFAULT 0,
+  pontos_obtidos integer DEFAULT 0,
+  data_registro timestamp with time zone DEFAULT now(),
+  CONSTRAINT results_pkey PRIMARY KEY (id),
+  CONSTRAINT results_match_id_fkey FOREIGN KEY (match_id) REFERENCES public.matches(id),
+  CONSTRAINT results_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(id)
+);
+CREATE TABLE public.teams (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  championship_id uuid NOT NULL,
+  group_id uuid,
+  nome_time text NOT NULL,
+  nome_line text NOT NULL,
+  tag text,
+  logo_url text,
+  created_at timestamp with time zone DEFAULT now(),
+  phase_id uuid,
+  CONSTRAINT teams_pkey PRIMARY KEY (id),
+  CONSTRAINT teams_championship_id_fkey FOREIGN KEY (championship_id) REFERENCES public.championships(id),
+  CONSTRAINT teams_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.groups(id),
+  CONSTRAINT teams_phase_id_fkey FOREIGN KEY (phase_id) REFERENCES public.tournament_phases(id)
+);
+CREATE TABLE public.tenants (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  nome text NOT NULL,
+  manager_id uuid,
+  data_criacao timestamp with time zone DEFAULT now(),
+  status text DEFAULT 'ativo'::text,
+  CONSTRAINT tenants_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_tenants_manager FOREIGN KEY (manager_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.tournament_phases (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  championship_id uuid,
+  nome_fase text NOT NULL,
+  ordem_fase integer NOT NULL,
+  tipo_fase text CHECK (tipo_fase = ANY (ARRAY['classificatoria'::text, 'eliminatoria'::text, 'final'::text])),
+  data_inicio timestamp with time zone,
+  data_fim timestamp with time zone,
+  configuracao jsonb,
+  CONSTRAINT tournament_phases_pkey PRIMARY KEY (id),
+  CONSTRAINT tournament_phases_championship_id_fkey FOREIGN KEY (championship_id) REFERENCES public.championships(id)
+);
+CREATE TABLE public.users (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  email text NOT NULL UNIQUE,
+  nome_usuario text NOT NULL,
+  role USER-DEFINED NOT NULL DEFAULT 'viewer'::app_role,
+  tenant_id uuid,
+  data_cadastro timestamp with time zone DEFAULT now(),
+  auth_user_id uuid,
+  CONSTRAINT users_pkey PRIMARY KEY (id),
+  CONSTRAINT users_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
+  CONSTRAINT users_auth_user_id_fkey FOREIGN KEY (auth_user_id) REFERENCES auth.users(id)
+);

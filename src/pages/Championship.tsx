@@ -3,12 +3,21 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../integrations/supabase/client";
 import Layout from "../components/Layout";
 import ChampionshipStatusManager from '../components/ChampionshipStatusManager';
+import TeamManagement from '../components/TeamManagement';
+import ChampionshipMatchManager from '../components/ChampionshipMatchManager';
+import RankingSystem from '../components/RankingSystem';
+import MatchResultsManager from '../components/MatchResultsManager';
+import { EditChampionshipDialog } from '../components/EditChampionshipDialog';
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 import { useSupabaseRealtime } from "../hooks/useSupabaseRealtime";
 import { useToast } from "../hooks/use-toast";
+import { deleteMatch, createMatch } from "../services/api";
 import {
   ArrowLeft,
   Trophy,
@@ -22,16 +31,26 @@ import {
   Crown,
   Medal,
   Award,
-  Upload
+  Upload,
+  Camera,
+  AlertTriangle,
+  Zap,
+  Eye,
+  CheckCircle,
+  XCircle,
+  PlayCircle,
+  Trash2,
+  Plus
 } from "lucide-react";
+import { RankingTable } from '@/components/RankingTable';
 
 interface Championship {
   id: string;
   nome: string;
   descricao?: string;
   data_inicio?: string;
-  data_fim?: string;
-  max_participantes?: number;
+  horario_inicio?: string;
+  tipo_campeonato?: string;
   premiacao?: string;
   organizador?: string;
   status: string;
@@ -63,6 +82,20 @@ interface TeamStats {
   total_points: number;
 }
 
+interface MatchResult {
+  id: string;
+  match_id: string;
+  team_id: string;
+  placement: number;
+  kills: number;
+  placement_points: number;
+  kill_points: number;
+  total_points: number;
+  confidence_score: number;
+  processed_at: string;
+  teams?: { name: string };
+}
+
 export default function Championship() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -70,12 +103,42 @@ export default function Championship() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [teamStats, setTeamStats] = useState<TeamStats[]>([]);
+  const [results, setResults] = useState<MatchResult[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("matches");
+  const [matchFilter, setMatchFilter] = useState<'all' | 'aguardando_prints' | 'em_analise' | 'finalizadas'>('all');
+  const [selectedMatchForResults, setSelectedMatchForResults] = useState<string | null>(null);
+  const [matchToDelete, setMatchToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showCreateMatchModal, setShowCreateMatchModal] = useState(false);
+  const [isCreatingMatch, setIsCreatingMatch] = useState(false);
+  const [newMatchData, setNewMatchData] = useState({
+    scheduledTime: '',
+    status: 'pendente' as 'pendente' | 'em_andamento' | 'finalizada'
+  });
   const { toast } = useToast();
+
+  // Calcular partidas aguardando prints
+  const matchesAwaitingPrints = matches.filter(match => 
+    match.status === 'finalizada' && !match.resultado_processado
+  );
+  const matchesInAnalysis = matches.filter(match => 
+    match.status === 'em_analise'
+  );
+  const completedMatchesWithResults = matches.filter(match => 
+    match.status === 'finalizada' && match.resultado_processado
+  );
 
   const handleStatusChange = (newStatus: 'rascunho' | 'ativo' | 'finalizado') => {
     setChampionship((prev) => (prev ? { ...prev, status: newStatus } : null));
+  };
+
+  const handleChampionshipUpdated = (updatedChampionship: Championship) => {
+    setChampionship(updatedChampionship);
+    toast({
+      title: "Campeonato Atualizado",
+      description: "As informações do campeonato foram atualizadas com sucesso.",
+    });
   };
 
   useEffect(() => {
@@ -134,6 +197,19 @@ export default function Championship() {
       setTeams(teamsData || []);
       setMatches(matchesData || []);
 
+      // Buscar resultados das partidas se existirem partidas
+      if (matchesData && matchesData.length > 0) {
+        const matchIds = matchesData.map(m => m.id);
+        const { data: resultsData } = await supabase
+          .from("match_results")
+          .select("*, teams(name)")
+          .in("match_id", matchIds);
+        
+        setResults(resultsData || []);
+      } else {
+        setResults([]);
+      }
+
       if (teamsData && matchesData) {
         const stats = calculateTeamStats(teamsData, matchesData);
         setTeamStats(stats);
@@ -177,6 +253,101 @@ export default function Championship() {
 
     // Convert to array and sort by points
     return Object.values(stats).sort((a, b) => b.total_points - a.total_points);
+  };
+
+  const handleDeleteMatch = async () => {
+    if (!matchToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await deleteMatch(matchToDelete);
+      
+      if (error) {
+        console.error('Erro ao deletar partida:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao deletar a partida. Tente novamente.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      toast({
+        title: "Sucesso",
+        description: "Partida deletada com sucesso!",
+      });
+      
+      // Recarregar dados
+      await fetchChampionshipData();
+      
+    } catch (error) {
+      console.error('Erro inesperado ao deletar partida:', error);
+      toast({
+        title: "Erro",
+        description: "Erro inesperado ao deletar a partida.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
+      setMatchToDelete(null);
+    }
+  };
+
+  const handleCreateMatch = async () => {
+    if (!championship?.id) return;
+
+    setIsCreatingMatch(true);
+    try {
+      // Calcular próximo número da partida
+      const nextMatchNumber = Math.max(...matches.map(m => m.ordem_queda || 0), 0) + 1;
+      
+      const { data, error } = await createMatch({
+        championship_id: championship.id,
+        match_number: nextMatchNumber,
+        scheduled_time: newMatchData.scheduledTime || undefined,
+        status: newMatchData.status
+      });
+      
+      if (error) {
+        toast({
+          title: "Erro ao criar partida",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Partida criada com sucesso!",
+        description: `Partida #${nextMatchNumber} foi criada e está pronta para o Battle Royale.`,
+      });
+      
+      // Recarregar dados e fechar modal
+      fetchChampionshipData();
+      setShowCreateMatchModal(false);
+      resetCreateMatchForm();
+    } catch (error) {
+      console.error('Erro ao criar partida:', error);
+      toast({
+        title: "Erro ao criar partida",
+        description: "Ocorreu um erro inesperado.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingMatch(false);
+    }
+  };
+
+  const resetCreateMatchForm = () => {
+    setNewMatchData({
+      scheduledTime: '',
+      status: 'pendente'
+    });
+  };
+
+  const handleCloseCreateModal = () => {
+    setShowCreateMatchModal(false);
+    resetCreateMatchForm();
   };
 
   const getMatchStatusBadge = (status: string) => {
@@ -231,89 +402,146 @@ export default function Championship() {
       {/* Header */}
       <div className="bg-gradient-dark border-b border-border/50 -m-6 mb-6 p-6">
         <div className="container mx-auto p-4 space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate("/championships")} className="p-2">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-orbitron font-bold text-glow">{championship.nome}</h1>
-            <p className="text-sm text-gray-500 mt-1">De {championship.data_inicio ? new Date(championship.data_inicio).toLocaleDateString() : 'N/A'} a {championship.data_fim ? new Date(championship.data_fim).toLocaleDateString() : 'N/A'}</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" onClick={() => navigate("/championships")} className="p-2">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-orbitron font-bold text-glow">{championship.nome}</h1>
+              <p className="text-sm text-gray-500 mt-1">De {championship.data_inicio ? new Date(championship.data_inicio).toLocaleDateString() : 'N/A'} a {championship.data_fim ? new Date(championship.data_fim).toLocaleDateString() : 'N/A'}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <EditChampionshipDialog 
+              championship={championship} 
+              onChampionshipUpdated={handleChampionshipUpdated}
+            />
           </div>
         </div>
       </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="flex items-center gap-3 p-4 bg-card rounded-lg border border-border/50">
-            <Trophy className="h-8 w-8 text-primary" />
+          <div className="flex items-center gap-3 p-4 bg-card rounded-lg border border-border/50 hover:border-primary/50 transition-colors">
+            <div className="bg-primary/20 rounded-full p-2">
+              <Trophy className="h-6 w-6 text-primary" />
+            </div>
             <div>
               <p className="text-sm text-muted-foreground">Times</p>
               <p className="text-2xl font-bold">{teams.length}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-4 bg-card rounded-lg border border-border/50">
-            <Users className="h-8 w-8 text-blue-400" />
+          <div className="flex items-center gap-3 p-4 bg-card rounded-lg border border-border/50 hover:border-red-500/50 transition-colors">
+            <div className="bg-red-500/20 rounded-full p-2">
+              <Camera className="h-6 w-6 text-red-500" />
+            </div>
             <div>
-              <p className="text-sm text-muted-foreground">Partidas</p>
-              <p className="text-2xl font-bold">{matches.length}</p>
+              <p className="text-sm text-muted-foreground">Aguardando Prints</p>
+              <p className="text-2xl font-bold text-red-500">{matchesAwaitingPrints.length}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-4 bg-card rounded-lg border border-border/50">
-            <Clock className="h-8 w-8 text-green-400" />
+          <div className="flex items-center gap-3 p-4 bg-card rounded-lg border border-border/50 hover:border-yellow-500/50 transition-colors">
+            <div className="bg-yellow-500/20 rounded-full p-2">
+              <Eye className="h-6 w-6 text-yellow-500" />
+            </div>
             <div>
-              <p className="text-sm text-muted-foreground">Progresso</p>
-              <div className="flex items-center gap-2 mt-1">
-                <div className="flex-1 bg-secondary rounded-full h-2">
-                  <div 
-                    className="bg-primary h-2 rounded-full transition-all duration-300" 
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-                <span className="text-sm font-medium">{Math.round(progress)}%</span>
-              </div>
+              <p className="text-sm text-muted-foreground">Em Análise</p>
+              <p className="text-2xl font-bold text-yellow-500">{matchesInAnalysis.length}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-4 bg-card rounded-lg border border-border/50">
-            <DollarSign className="h-8 w-8 text-yellow-400" />
+          <div className="flex items-center gap-3 p-4 bg-card rounded-lg border border-border/50 hover:border-green-500/50 transition-colors">
+            <div className="bg-green-500/20 rounded-full p-2">
+              <CheckCircle className="h-6 w-6 text-green-500" />
+            </div>
             <div>
-              <p className="text-sm text-muted-foreground">Prize Pool</p>
-              <p className="text-xl font-bold">{championship.premiacao || 'Não definido'}</p>
+              <p className="text-sm text-muted-foreground">Finalizadas</p>
+              <p className="text-2xl font-bold text-green-500">{completedMatchesWithResults.length}</p>
             </div>
           </div>
         </div>
 
-        {/* Additional Info */}
+        {/* Ações Rápidas */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-4 bg-card rounded-lg border border-border/50">
-            <div className="flex items-center gap-2 mb-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Organizador</span>
-            </div>
-            <p className="font-medium">{championship.organizador || 'Não informado'}</p>
-          </div>
+          <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 hover:border-primary/40 transition-colors cursor-pointer" 
+                onClick={() => { setActiveTab('matches'); setMatchFilter('aguardando_prints'); }}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-primary/20 rounded-full p-2">
+                  <Camera className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold text-primary">Enviar Prints</p>
+                  <p className="text-sm text-muted-foreground">Processar resultados</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-          <div className="p-4 bg-card rounded-lg border border-border/50">
-            <div className="flex items-center gap-2 mb-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Duração</span>
-            </div>
-            <p className="font-medium">
-              {championship.data_inicio ? new Date(championship.data_inicio).toLocaleDateString('pt-BR') : 'Não definido'}
-              {championship.data_fim && ` - ${new Date(championship.data_fim).toLocaleDateString('pt-BR')}`}
-            </p>
-          </div>
+          <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20 hover:border-blue-500/40 transition-colors cursor-pointer" 
+                onClick={() => setActiveTab('ranking')}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-500/20 rounded-full p-2">
+                  <Trophy className="h-5 w-5 text-blue-500" />
+                </div>
+                <div>
+                  <p className="font-semibold text-blue-500">Ver Ranking</p>
+                  <p className="text-sm text-muted-foreground">Classificação atual</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-          <div className="p-4 bg-card rounded-lg border border-border/50">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Partidas em Andamento</span>
-            </div>
-            <p className="font-medium">{matches.filter(m => m.status === 'em_andamento').length} ativas</p>
-          </div>
+          <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20 hover:border-green-500/40 transition-colors cursor-pointer" 
+                onClick={() => setActiveTab('teams')}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-green-500/20 rounded-full p-2">
+                  <Users className="h-5 w-5 text-green-500" />
+                </div>
+                <div>
+                  <p className="font-semibold text-green-500">Gerenciar Times</p>
+                  <p className="text-sm text-muted-foreground">{teams.length} times</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
+
+      {/* Banner de Alerta para Partidas Aguardando Prints */}
+      {matchesAwaitingPrints.length > 0 && (
+        <div className="bg-gradient-to-r from-red-600 to-red-700 border border-red-500 rounded-lg p-4 mb-6 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 rounded-full p-2">
+                <AlertTriangle className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-lg">
+                  Partida em andamento! Você tem {matchesAwaitingPrints.length} partidas aguardando prints
+                </h3>
+                <p className="text-red-100 text-sm">
+                  Envie os prints dos resultados rapidamente para gerar os rankings automaticamente
+                </p>
+              </div>
+            </div>
+            <Button 
+              onClick={() => {
+                setActiveTab('matches');
+                setMatchFilter('aguardando_prints');
+              }}
+              className="bg-white text-red-600 hover:bg-red-50 font-bold px-6 py-2 shadow-lg"
+            >
+              <Camera className="h-4 w-4 mr-2" />
+              Enviar Prints Agora
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="space-y-6">
@@ -325,10 +553,18 @@ export default function Championship() {
           />
         )}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:w-96">
+          <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="teams">Times</TabsTrigger>
             <TabsTrigger value="ranking">Ranking</TabsTrigger>
-            <TabsTrigger value="matches">Matches</TabsTrigger>
+            <TabsTrigger value="matches" className="relative">
+              Matches
+              {matchesAwaitingPrints.length > 0 && (
+                <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-0.5">
+                  {matchesAwaitingPrints.length}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -349,8 +585,17 @@ export default function Championship() {
                   <div className="flex items-center gap-3">
                     <Target className="h-5 w-5 text-primary" />
                     <div>
-                      <p className="text-sm text-muted-foreground">Máximo de Participantes</p>
-                      <p className="font-medium">{championship.max_participantes || 'Ilimitado'}</p>
+                      <p className="text-sm text-muted-foreground">Máximo de {championship.tipo_campeonato === 'individual' ? 'Participantes' : 'Times'}</p>
+                      <p className="font-medium">
+                        {(() => {
+                          const tipo = championship.tipo_campeonato;
+                          if (tipo === 'individual') return '100 participantes';
+                          if (tipo === 'duplas') return '50 duplas';
+                          if (tipo === 'trios') return '33 trios';
+                          if (tipo === 'squad') return '25 squads';
+                          return 'Não definido';
+                        })()}
+                      </p>
                     </div>
                   </div>
                   
@@ -404,87 +649,358 @@ export default function Championship() {
             </div>
           </TabsContent>
 
+          <TabsContent value="teams" className="space-y-6">
+            <TeamManagement championshipId={championship.id} />
+          </TabsContent>
+
+          <TabsContent value="partidas" className="space-y-6">
+            <ChampionshipMatchManager championshipId={championship.id} />
+          </TabsContent>
+
           <TabsContent value="ranking" className="space-y-6">
-            <Card className="bg-gradient-dark border-primary/20">
-              <CardHeader>
-                <CardTitle className="font-orbitron">Ranking dos Times</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {teamStats.length > 0 ? (
-                  <div className="space-y-3">
-                    {teamStats.map((team, index) => (
-                      <div key={team.team_id} className="flex items-center gap-4 p-4 bg-card rounded-lg border border-border/50">
-                        <div className="flex items-center justify-center w-8 h-8 bg-primary/20 rounded-full">
-                          <span className="text-sm font-bold">#{index + 1}</span>
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold">{team.team_name}</h3>
-                          <p className="text-sm text-muted-foreground">{team.matches_played} partidas jogadas</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold">{team.total_points} pts</p>
-                          <p className="text-sm text-muted-foreground">{team.wins}W - {team.losses}L</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <Trophy className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">Nenhum time encontrado</h3>
-                    <p className="text-muted-foreground">Os times aparecerão aqui quando forem adicionados ao campeonato</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <RankingSystem championshipId={championship.id} />
           </TabsContent>
 
           <TabsContent value="matches" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-orbitron font-bold">Partidas</h2>
-              <Button variant="default">
-                <Upload className="h-4 w-4" />
-                Upload Results
+            {/* Botão de Criar Nova Partida */}
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold">Partidas Battle Royale</h2>
+              <Button 
+                onClick={() => setShowCreateMatchModal(true)}
+                className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold px-6 py-3 rounded-lg transition-all transform hover:scale-105 flex items-center gap-2 shadow-lg"
+              >
+                <Plus className="w-5 h-5" />
+                + Nova Partida Battle Royale
               </Button>
             </div>
+            
+            {/* Filtros de Status */}
+            <div className="flex gap-2 mb-6">
+              <button
+                onClick={() => setMatchFilter('all')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  matchFilter === 'all'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted hover:bg-muted/80'
+                }`}
+              >
+                Todas ({matches.length})
+              </button>
+              <button
+                onClick={() => setMatchFilter('aguardando_prints')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  matchFilter === 'aguardando_prints'
+                    ? 'bg-red-500 text-white'
+                    : 'bg-muted hover:bg-muted/80'
+                }`}
+              >
+                Aguardando Prints ({matchesAwaitingPrints.length})
+              </button>
+              <button
+                onClick={() => setMatchFilter('em_analise')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  matchFilter === 'em_analise'
+                    ? 'bg-yellow-500 text-white'
+                    : 'bg-muted hover:bg-muted/80'
+                }`}
+              >
+                Em Análise ({matchesInAnalysis.length})
+              </button>
+              <button
+                onClick={() => setMatchFilter('finalizadas')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  matchFilter === 'finalizadas'
+                    ? 'bg-green-500 text-white'
+                    : 'bg-muted hover:bg-muted/80'
+                }`}
+              >
+                Finalizadas ({completedMatchesWithResults.length})
+              </button>
+            </div>
 
-            <div className="space-y-4">
-              {matches.length > 0 ? (
-                matches.map((match) => (
-                  <Card key={match.id} className="bg-gradient-dark border-primary/20">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-lg font-semibold">Partida #{match.ordem_queda}</h4>
-                          <p className="text-muted-foreground">Campeonato: {championship.nome}</p>
+            {/* Cards de Partidas Redesenhados */}
+            <div className="grid gap-4">
+              {matches
+                .filter(match => {
+                  if (matchFilter === 'all') return true;
+                  if (matchFilter === 'aguardando_prints') return match.status === 'finalizada' && !match.resultado_processado;
+                  if (matchFilter === 'em_analise') return match.status === 'em_analise';
+                  if (matchFilter === 'finalizadas') return match.status === 'finalizada' && match.resultado_processado;
+                  return true;
+                })
+                .map((match) => {
+                  const isAwaitingPrint = match.status === 'finalizada' && !match.resultado_processado;
+                  const isInAnalysis = match.status === 'em_analise';
+                  const isCompleted = match.status === 'finalizada' && match.resultado_processado;
+                  
+                  return (
+                    <Card key={match.id} className={`p-6 transition-all hover:shadow-lg ${
+                      isAwaitingPrint ? 'border-red-500 border-2 bg-red-50/50 dark:bg-red-950/20' : 
+                      isInAnalysis ? 'border-yellow-500 border-2 bg-yellow-50/50 dark:bg-yellow-950/20' :
+                      isCompleted ? 'border-green-500 border-2 bg-green-50/50 dark:bg-green-950/20' :
+                      'border-border'
+                    }`}>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-muted-foreground">Partida #{match.ordem_queda}</span>
+                          {isAwaitingPrint && (
+                            <Badge variant="destructive" className="bg-red-500 hover:bg-red-600">
+                              <AlertTriangle className="w-3 h-3 mr-1" />
+                              Aguardando Prints
+                            </Badge>
+                          )}
+                          {isInAnalysis && (
+                            <Badge variant="secondary" className="bg-yellow-500 text-white hover:bg-yellow-600">
+                              <Eye className="w-3 h-3 mr-1" />
+                              Em Análise
+                            </Badge>
+                          )}
+                          {isCompleted && (
+                            <Badge variant="secondary" className="bg-green-500 text-white hover:bg-green-600">
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Finalizada
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
                           {match.data_hora_queda && (
                             <p className="text-sm text-muted-foreground">
-                              Data: {new Date(match.data_hora_queda).toLocaleDateString()}
+                              {new Date(match.data_hora_queda).toLocaleString('pt-BR')}
                             </p>
                           )}
-                        </div>
-                        <div className="text-right">
-                          {getMatchStatusBadge(match.status)}
-                          {match.status === "finalizada" && (
-                            <Button variant="ghost" size="sm" className="ml-2">
-                              Ver Resultados
-                            </Button>
-                          )}
+                          <button
+                            onClick={() => setMatchToDelete(match.id)}
+                            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 rounded transition-colors"
+                            title="Deletar partida"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))
-              ) : (
-                <Card className="bg-gradient-dark border-primary/20">
-                  <CardContent className="p-12 text-center">
-                    <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">Nenhuma partida encontrada</h3>
-                    <p className="text-muted-foreground">As partidas aparecerão aqui quando forem criadas</p>
-                  </CardContent>
-                </Card>
-              )}
+                      
+                      <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-6 w-full">
+                          <div className="flex-1 text-center">
+                            <div className="bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg p-4">
+                              <p className="font-bold text-xl">🏆 BATTLE ROYALE</p>
+                              <p className="text-sm opacity-90">25 Times Competindo</p>
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="bg-muted rounded-lg p-3">
+                              <p className="text-sm text-muted-foreground">Resultados Processados</p>
+                              <p className="font-bold text-lg">
+                                {/* Contar quantos times já têm resultados para esta partida */}
+                                {(() => {
+                                  const matchResults = results.filter(r => r.match_id === match.id);
+                                  const uniqueTeams = new Set(matchResults.map(r => r.team_id));
+                                  return `${uniqueTeams.size}/25`;
+                                })()}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex gap-3">
+                        {isAwaitingPrint && (
+                          <button 
+                            onClick={() => setSelectedMatchForResults(match.id)}
+                            className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-3 px-6 rounded-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+                          >
+                            <Camera className="w-5 h-5" />
+                            📸 Enviar Print do Resultado
+                          </button>
+                        )}
+                        {isInAnalysis && (
+                          <button 
+                            onClick={() => setSelectedMatchForResults(match.id)}
+                            className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-semibold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2"
+                          >
+                            <Eye className="w-5 h-5" />
+                            👁️ Acompanhar Análise
+                          </button>
+                        )}
+                        {isCompleted && (
+                          <button 
+                            onClick={() => setSelectedMatchForResults(match.id)}
+                            className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-all flex items-center justify-center gap-2"
+                          >
+                            <CheckCircle className="w-5 h-5" />
+                            ✅ Ver Resultado Completo
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => setSelectedMatchForResults(match.id)}
+                          className="bg-muted hover:bg-muted/80 text-foreground font-medium py-3 px-4 rounded-lg transition-colors"
+                        >
+                          Gerenciar Resultados
+                        </button>
+                      </div>
+                    </Card>
+                  );
+                })}
             </div>
+            
+            {/* Modal para Gerenciar Resultados da Partida */}
+            <Dialog open={!!selectedMatchForResults} onOpenChange={() => setSelectedMatchForResults(null)}>
+              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    Gerenciar Resultados - Partida #{matches.find(m => m.id === selectedMatchForResults)?.ordem_queda}
+                  </DialogTitle>
+                </DialogHeader>
+                {selectedMatchForResults && (
+                  <MatchResultsManager 
+                    matchId={selectedMatchForResults}
+                    teams={teams.map(team => ({ id: team.id, name: team.nome }))}
+                    onResultsChange={() => {
+                      // Recarregar dados quando resultados mudarem
+                      fetchChampionshipData();
+                    }}
+                  />
+                )}
+              </DialogContent>
+            </Dialog>
+            
+            {/* Dialog de Confirmação para Deletar Partida */}
+            <Dialog open={!!matchToDelete} onOpenChange={() => setMatchToDelete(null)}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Confirmar Exclusão</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Tem certeza que deseja deletar a partida #{matches.find(m => m.id === matchToDelete)?.ordem_queda}?
+                  </p>
+                  <p className="text-sm text-red-600 font-medium">
+                    Esta ação não pode ser desfeita e todos os resultados associados serão perdidos.
+                  </p>
+                  <div className="flex gap-3 justify-end">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setMatchToDelete(null)}
+                      disabled={isDeleting}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button 
+                      variant="destructive" 
+                      onClick={handleDeleteMatch}
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Deletando...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Deletar
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+            
+            {/* Modal de Criação de Nova Partida */}
+            <Dialog open={showCreateMatchModal} onOpenChange={handleCloseCreateModal}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-primary" />
+                    Nova Partida Battle Royale
+                  </DialogTitle>
+                  <DialogDescription>
+                    Crie uma nova partida para 25 times competirem no modo Battle Royale.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="match-number">Número da Partida</Label>
+                    <Input 
+                      id="match-number"
+                      value={`#${Math.max(...matches.map(m => m.ordem_queda || 0), 0) + 1}`}
+                      disabled
+                      className="bg-muted"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Número gerado automaticamente
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="scheduled-time">Data e Hora (Opcional)</Label>
+                    <Input 
+                      id="scheduled-time"
+                      type="datetime-local"
+                      value={newMatchData.scheduledTime}
+                      onChange={(e) => setNewMatchData(prev => ({ ...prev, scheduledTime: e.target.value }))}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Deixe em branco para usar a data/hora atual
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="status">Status Inicial</Label>
+                    <select 
+                      id="status"
+                      value={newMatchData.status}
+                      onChange={(e) => setNewMatchData(prev => ({ ...prev, status: e.target.value as 'pendente' | 'em_andamento' | 'finalizada' }))}
+                      className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm"
+                    >
+                      <option value="pendente">Pendente</option>
+                      <option value="em_andamento">Em Andamento</option>
+                      <option value="finalizada">Finalizada</option>
+                    </select>
+                  </div>
+                  
+                  <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Trophy className="w-4 h-4 text-blue-600" />
+                      <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                        Battle Royale - 25 Times
+                      </p>
+                    </div>
+                    <p className="text-xs text-blue-600 dark:text-blue-300">
+                      Esta partida será configurada automaticamente para o modo Battle Royale com 25 times competindo.
+                    </p>
+                  </div>
+                  
+                  <div className="flex gap-3 justify-end pt-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={handleCloseCreateModal}
+                      disabled={isCreatingMatch}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button 
+                      onClick={handleCreateMatch}
+                      disabled={isCreatingMatch}
+                      className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                    >
+                      {isCreatingMatch ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Criando...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Criar Partida
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
         </Tabs>
       </div>

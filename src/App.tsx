@@ -13,6 +13,9 @@ import Championship from "./pages/Championship";
 import Teams from "./pages/Teams";
 import Players from "./pages/Players";
 import Matches from "./pages/Matches";
+// MatchPrints page removed - functionality integrated into MatchResultsManager
+import BattleRoyaleProcessor from "./pages/BattleRoyaleProcessor";
+
 import SuperAdminPanel from "./pages/SuperAdminPanel";
 import NotFound from "./pages/NotFound";
 
@@ -56,6 +59,12 @@ const App = () => (
              <Route path="/matches" element={
                <ProtectedRoute>
                  <Matches />
+               </ProtectedRoute>
+             } />
+             {/* MatchPrints route removed - functionality integrated into championship management */}
+             <Route path="/battle-royale-processor/:matchId" element={
+               <ProtectedRoute>
+                 <BattleRoyaleProcessor />
                </ProtectedRoute>
              } />
              <Route path="/super-admin" element={
