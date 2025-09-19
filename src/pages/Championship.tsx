@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../integrations/supabase/client";
 import Layout from "../components/Layout";
 import ChampionshipStatusManager from '../components/ChampionshipStatusManager';
@@ -99,6 +99,7 @@ interface MatchResult {
 export default function Championship() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [championship, setChampionship] = useState<Championship | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -108,6 +109,7 @@ export default function Championship() {
   const [activeTab, setActiveTab] = useState("matches");
   const [matchFilter, setMatchFilter] = useState<'all' | 'aguardando_prints' | 'em_analise' | 'finalizadas'>('all');
   const [selectedMatchForResults, setSelectedMatchForResults] = useState<string | null>(null);
+  const [selectedMatchForViewResults, setSelectedMatchForViewResults] = useState<string | null>(null);
   const [matchToDelete, setMatchToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showCreateMatchModal, setShowCreateMatchModal] = useState(false);
@@ -146,6 +148,27 @@ export default function Championship() {
       fetchChampionshipData();
     }
   }, [id]);
+
+  // 🎯 CORREÇÃO: Detectar parâmetro openResults e abrir modal automaticamente
+  useEffect(() => {
+    const openResultsMatchId = searchParams.get('openResults');
+    if (openResultsMatchId && matches.length > 0) {
+      // Verificar se a partida existe
+      const matchExists = matches.find(m => m.id === openResultsMatchId);
+      if (matchExists) {
+        console.log('🎯 AUTO-ABRINDO MODAL DE RESULTADOS para match:', openResultsMatchId);
+        setSelectedMatchForViewResults(openResultsMatchId);
+        // Limpar o parâmetro da URL
+        setSearchParams({});
+        // Mostrar toast de sucesso
+        toast({
+          title: "Resultados Processados!",
+          description: "Os resultados foram salvos e estão sendo exibidos.",
+          variant: "default"
+        });
+      }
+    }
+  }, [matches, searchParams, setSearchParams, toast]);
 
   const handleChampionshipUpdate = useCallback(() => {
     toast({
@@ -200,13 +223,20 @@ export default function Championship() {
       // Buscar resultados das partidas se existirem partidas
       if (matchesData && matchesData.length > 0) {
         const matchIds = matchesData.map(m => m.id);
-        const { data: resultsData } = await supabase
+        console.log('🔍 BUSCANDO RESULTADOS - Match IDs:', matchIds);
+        
+        const { data: resultsData, error: resultsError } = await supabase
           .from("match_results")
-          .select("*, teams(name)")
+          .select("*, teams(nome_time)")
           .in("match_id", matchIds);
+        
+        console.log('📊 RESULTADOS RETORNADOS DO BANCO:', resultsData);
+        console.log('❌ ERRO NA BUSCA (se houver):', resultsError);
+        console.log('📈 TOTAL DE RESULTADOS ENCONTRADOS:', resultsData?.length || 0);
         
         setResults(resultsData || []);
       } else {
+        console.log('⚠️ NENHUMA PARTIDA ENCONTRADA - Não buscando resultados');
         setResults([]);
       }
 
@@ -783,7 +813,16 @@ export default function Championship() {
                           <div className="flex-1 text-center">
                             <div className="bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg p-4">
                               <p className="font-bold text-xl">🏆 BATTLE ROYALE</p>
-                              <p className="text-sm opacity-90">25 Times Competindo</p>
+                              <p className="text-sm opacity-90">
+                                {(() => {
+                                  const tipo = championship.tipo_campeonato;
+                                  if (tipo === 'individual') return '100 Participantes Solo';
+                                  if (tipo === 'duplas') return '50 Duplas Competindo';
+                                  if (tipo === 'trios') return '33 Trios Competindo';
+                                  if (tipo === 'squad') return '25 Squads Competindo';
+                                  return '25 Times Competindo';
+                                })()} 
+                              </p>
                             </div>
                           </div>
                           <div className="text-center">
@@ -794,7 +833,13 @@ export default function Championship() {
                                 {(() => {
                                   const matchResults = results.filter(r => r.match_id === match.id);
                                   const uniqueTeams = new Set(matchResults.map(r => r.team_id));
-                                  return `${uniqueTeams.size}/25`;
+                                  const tipo = championship.tipo_campeonato;
+                                  let maxTeams = 25;
+                                  if (tipo === 'individual') maxTeams = 100;
+                                  else if (tipo === 'duplas') maxTeams = 50;
+                                  else if (tipo === 'trios') maxTeams = 33;
+                                  else if (tipo === 'squad') maxTeams = 25;
+                                  return `${uniqueTeams.size}/${maxTeams}`;
                                 })()}
                               </p>
                             </div>
@@ -830,24 +875,58 @@ export default function Championship() {
                             ✅ Ver Resultado Completo
                           </button>
                         )}
-                        <button 
-                          onClick={() => setSelectedMatchForResults(match.id)}
-                          className="bg-muted hover:bg-muted/80 text-foreground font-medium py-3 px-4 rounded-lg transition-colors"
-                        >
-                          Gerenciar Resultados
-                        </button>
+                        <div className="flex gap-2">
+                          <button 
+            onClick={() => setSelectedMatchForResults(match.id)}
+            className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center gap-2"
+          >
+            <Camera className="w-4 h-4" />
+            ENVIAR PRINTS
+          </button>
+          <button 
+            onClick={() => {
+              // 🔍 DEBUG: Logs detalhados para investigar o problema
+              console.log('🎯 CLIQUE VER RESULTADOS - Match ID:', match.id);
+              console.log('📊 TODOS OS RESULTADOS CARREGADOS:', results);
+              console.log('🔍 RESULTADOS FILTRADOS PARA ESTA PARTIDA:', results.filter(r => r.match_id === match.id));
+              console.log('📈 TOTAL DE RESULTADOS ENCONTRADOS:', results.filter(r => r.match_id === match.id).length);
+              
+              // Abrir modal específico para VER RESULTADOS
+              const matchResults = results.filter(r => r.match_id === match.id);
+              console.log('✅ MATCH RESULTS FINAL:', matchResults);
+              
+              if (matchResults.length > 0) {
+                console.log('✅ ABRINDO MODAL - Resultados encontrados!');
+                setSelectedMatchForViewResults(match.id);
+              } else {
+                console.log('❌ NENHUM RESULTADO - Mostrando toast de erro');
+                console.log('🔍 VERIFICAÇÃO ADICIONAL - Match existe?', match);
+                console.log('🔍 VERIFICAÇÃO ADICIONAL - Results array:', results);
+                toast({
+                  title: "Nenhum resultado encontrado",
+                  description: "Esta partida ainda não possui resultados processados.",
+                  variant: "default"
+                });
+              }
+            }}
+            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center gap-2"
+          >
+            <Eye className="w-4 h-4" />
+            VER RESULTADOS
+          </button>
+                        </div>
                       </div>
                     </Card>
                   );
                 })}
             </div>
             
-            {/* Modal para Gerenciar Resultados da Partida */}
+            {/* Modal para ENVIAR PRINTS da Partida */}
             <Dialog open={!!selectedMatchForResults} onOpenChange={() => setSelectedMatchForResults(null)}>
               <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
-                    Gerenciar Resultados - Partida #{matches.find(m => m.id === selectedMatchForResults)?.ordem_queda}
+                    ENVIAR PRINTS - Partida #{matches.find(m => m.id === selectedMatchForResults)?.ordem_queda}
                   </DialogTitle>
                 </DialogHeader>
                 {selectedMatchForResults && (
@@ -859,6 +938,86 @@ export default function Championship() {
                       fetchChampionshipData();
                     }}
                   />
+                )}
+              </DialogContent>
+            </Dialog>
+
+            {/* Modal para VER RESULTADOS da Partida */}
+            <Dialog open={!!selectedMatchForViewResults} onOpenChange={() => setSelectedMatchForViewResults(null)}>
+              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    Resultados Processados - Partida #{matches.find(m => m.id === selectedMatchForViewResults)?.ordem_queda}
+                  </DialogTitle>
+                </DialogHeader>
+                {selectedMatchForViewResults && (
+                  <div className="space-y-4">
+                    {/* Exibir apenas os resultados processados */}
+                    {(() => {
+                      const matchResults = results.filter(r => r.match_id === selectedMatchForViewResults);
+                      
+                      if (matchResults.length === 0) {
+                        return (
+                          <div className="text-center py-8">
+                            <p className="text-gray-500">Nenhum resultado processado ainda</p>
+                          </div>
+                        );
+                      }
+                      
+                      // Ordenar por colocação
+                      const sortedResults = [...matchResults].sort((a, b) => a.placement - b.placement);
+                      
+                      return (
+                        <div className="space-y-3">
+                          <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                            <h3 className="text-lg font-semibold text-green-800 dark:text-green-200 mb-2">
+                              ✅ Resultados Extraídos ({sortedResults.length} equipes)
+                            </h3>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {sortedResults.map((result) => (
+                              <div key={result.id} className="bg-white dark:bg-gray-800 rounded-lg p-4 border-2 border-green-300 shadow-md">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex flex-col">
+                                    <h4 className="font-bold text-gray-800 dark:text-gray-200">
+                                      {result.teams?.nome_time || `Time ${result.team_id}`}
+                                    </h4>
+                                  </div>
+                                  <div className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold">
+                                    {result.placement}º
+                                  </div>
+                                </div>
+                                
+                                <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                                  <div className="flex justify-between">
+                                    <span>Kills:</span>
+                                    <span className="font-medium">{result.kills}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Pts Posição:</span>
+                                    <span className="font-medium">{result.placement_points}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Pts Kills:</span>
+                                    <span className="font-medium">{result.kill_points}</span>
+                                  </div>
+                                  <div className="flex justify-between border-t pt-1">
+                                    <span className="font-bold">Total:</span>
+                                    <span className="font-bold text-purple-600">{result.total_points}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Confiança:</span>
+                                    <span className="font-medium">{(result.confidence_score * 100).toFixed(1)}%</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 )}
               </DialogContent>
             </Dialog>

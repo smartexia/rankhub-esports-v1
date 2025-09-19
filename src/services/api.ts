@@ -136,10 +136,40 @@ export const saveMatchResultDirect = async (
   }
 ) => {
   try {
-    // Save result directly to database
+    console.log(`🔄 UPSERT: Salvando resultado para match_id: ${matchId}, team_id: ${teamId}`);
+    console.log(`📊 DADOS:`, resultData);
+    
+    // 🔐 OBTER TENANT_ID DO USUÁRIO LOGADO (necessário para RLS)
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      throw new Error('Usuário não autenticado');
+    }
+
+    // Buscar dados do usuário para obter tenant_id
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('tenant_id')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (userError) {
+      console.error('❌ ERRO: Falha ao buscar dados do usuário:', userError);
+      throw new Error('Não foi possível obter dados do usuário');
+    }
+
+    if (!userData.tenant_id) {
+      console.error('❌ ERRO: tenant_id não encontrado para o usuário');
+      throw new Error('Usuário não possui tenant_id válido');
+    }
+
+    console.log('🔐 TENANT_ID OBTIDO:', userData.tenant_id);
+    
+    // 🚀 SOLUÇÃO UPSERT: Use INSERT ... ON CONFLICT para evitar duplicatas
+    // A constraint única é "match_results_match_id_team_id_key" (match_id + team_id)
     const { data, error } = await supabase
       .from('match_results')
-      .insert([{
+      .upsert({
         match_id: matchId,
         team_id: teamId,
         placement: resultData.placement,
@@ -148,13 +178,23 @@ export const saveMatchResultDirect = async (
         kill_points: resultData.kill_points,
         total_points: resultData.total_points,
         confidence_score: resultData.confidence_score || 0.9,
+        tenant_id: userData.tenant_id, // 🔐 INCLUIR TENANT_ID para RLS
         processed_at: new Date().toISOString()
-      }])
+      }, {
+        onConflict: 'match_id,team_id', // Especifica as colunas da constraint única
+        ignoreDuplicates: false // Atualiza se já existir
+      })
       .select('*, teams(nome_time)');
+    
+    if (error) {
+      console.error(`❌ ERRO UPSERT:`, error);
+    } else {
+      console.log(`✅ UPSERT SUCESSO:`, data);
+    }
       
     return { data, error };
   } catch (error) {
-    console.error('Error in saveMatchResultDirect:', error);
+    console.error('❌ ERRO CRÍTICO em saveMatchResultDirect:', error);
     return { 
       data: null, 
       error: { 
@@ -170,11 +210,16 @@ export const saveMatchResultDirect = async (
  * @returns Promise with match results
  */
 export const getMatchResults = async (matchId: string) => {
+  console.log('🔍 API: Buscando resultados para match_id:', matchId);
+  
   const { data, error } = await supabase
     .from('match_results')
     .select('*, teams(nome_time)')
     .eq('match_id', matchId)
     .order('placement', { ascending: true });
+  
+  console.log('📊 API: Resultados retornados:', data);
+  console.log('❌ API: Erro (se houver):', error);
     
   return { data, error };
 };

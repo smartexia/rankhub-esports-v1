@@ -13,25 +13,11 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   processAndSaveMatchResult, 
   saveMatchResultDirect,
-  getMatchResults, 
-  updateMatchResult, 
-  deleteMatchResult 
+  getMatchResults
 } from '@/services/api';
 import { isGeminiConfigured, getGeminiStatus } from '@/services/geminiApi';
-import { Loader2, Upload, Check, X, Edit, Trash2, AlertCircle, FileImage, ExternalLink } from 'lucide-react';
-import RankingBatchProcessor from './RankingBatchProcessor';
-import BattleRoyaleProcessor from './BattleRoyaleProcessor';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { Loader2, Check, X, AlertCircle, ExternalLink } from 'lucide-react';
+// Imports de edição removidos - não utilizados na interface simplificada
 
 interface Team {
   id: string;
@@ -65,17 +51,16 @@ const MatchResultsManager: React.FC<MatchResultsManagerProps> = ({
 }) => {
   const navigate = useNavigate();
   const [results, setResults] = useState<MatchResult[]>([]);
-
   const [isLoading, setIsLoading] = useState(true);
-  const [editingResult, setEditingResult] = useState<MatchResult | null>(null);
-  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
-  const [showBatchProcessor, setShowBatchProcessor] = useState(false);
-  const [showBattleRoyaleProcessor, setShowBattleRoyaleProcessor] = useState(false);
+  // Estado removido - não mais necessário
+  // Estados removidos - interface simplificada com apenas 1 botão
   const [geminiStatus, setGeminiStatus] = useState({
     configured: false,
     working: false,
     error: null as string | null
   });
+  
+  // Funções removidas - relacionadas aos componentes não utilizados
   const { toast } = useToast();
 
   // Check Gemini configuration on mount
@@ -139,78 +124,11 @@ const MatchResultsManager: React.FC<MatchResultsManagerProps> = ({
 
 
 
-  const handleDeleteResult = async (resultId: string) => {
-    try {
-      const { error } = await deleteMatchResult(resultId);
-      
-      if (error) {
-        console.error('Error deleting result:', error);
-        toast({
-          title: "Erro",
-          description: "Erro ao remover resultado",
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      toast({
-        title: "Sucesso",
-        description: "Resultado removido com sucesso",
-        variant: "default"
-      });
-      await loadResults();
-      if (onResultsChange) {
-        onResultsChange();
-      }
-    } catch (error) {
-      console.error('Error deleting result:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao remover resultado",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleSaveEdit = async (updates: Partial<MatchResult>) => {
-    if (!editingResult) return;
-
-    try {
-      const { error } = await updateMatchResult(editingResult.id, updates);
-      
-      if (error) {
-        console.error('Error updating result:', error);
-        toast({
-          title: "Erro",
-          description: "Erro ao atualizar resultado",
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      toast({
-        title: "Sucesso",
-        description: "Resultado atualizado com sucesso",
-        variant: "default"
-      });
-      setEditingResult(null);
-      await loadResults();
-      if (onResultsChange) {
-        onResultsChange();
-      }
-    } catch (error) {
-      console.error('Error updating result:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao atualizar resultado",
-        variant: "destructive"
-      });
-    }
-  };
+  // Funções de edição e exclusão removidas - não necessárias no modal de envio
 
   const handleBatchResultsProcessed = async (processedResults: any[]) => {
     try {
-      setIsBatchProcessing(true);
+      // Processamento simplificado
       
       // Save each result to the database using real processed data
       const savePromises = processedResults.map(async (result) => {
@@ -248,7 +166,7 @@ const MatchResultsManager: React.FC<MatchResultsManagerProps> = ({
       
       // Reload results and close batch processor
       await loadResults();
-      setShowBatchProcessor(false);
+      // Estado removido
       
       if (onResultsChange) {
         onResultsChange();
@@ -262,7 +180,7 @@ const MatchResultsManager: React.FC<MatchResultsManagerProps> = ({
         variant: "destructive"
       });
     } finally {
-      setIsBatchProcessing(false);
+      // Estado removido
     }
   };
 
@@ -313,40 +231,20 @@ const MatchResultsManager: React.FC<MatchResultsManagerProps> = ({
         </div>
       </div>
 
-      {/* Processor Toggle Buttons */}
-      <div className="flex gap-2 flex-wrap">
+      {/* Processamento de Resultados */}
+      <div className="flex justify-center">
         <Button
           onClick={() => navigate(`/battle-royale-processor/${matchId}`)}
-          className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+          className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+          size="lg"
         >
-          <ExternalLink className="mr-2 h-4 w-4" />
-          🚀 Battle Royale - Página Dedicada
+          <ExternalLink className="mr-3 h-5 w-5" />
+          🚀 Processar Resultados Battle Royale
         </Button>
-        
-        <Button
-          variant={showBattleRoyaleProcessor ? "default" : "outline"}
-          onClick={() => {
-            setShowBattleRoyaleProcessor(!showBattleRoyaleProcessor);
-            if (showBatchProcessor) setShowBatchProcessor(false);
-          }}
-          disabled={isBatchProcessing}
-          className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
-        >
-          <FileImage className="mr-2 h-4 w-4" />
-          🏆 {showBattleRoyaleProcessor ? "Ocultar" : "Battle Royale"} (Modal)
-        </Button>
-        
-        <Button
-          variant={showBatchProcessor ? "default" : "outline"}
-          onClick={() => {
-            setShowBatchProcessor(!showBatchProcessor);
-            if (showBattleRoyaleProcessor) setShowBattleRoyaleProcessor(false);
-          }}
-          disabled={isBatchProcessing}
-        >
-          <FileImage className="mr-2 h-4 w-4" />
-          {showBatchProcessor ? "Ocultar" : "Mostrar"} Processamento em Lote
-        </Button>
+      </div>
+      
+      <div className="text-center text-sm text-gray-600 dark:text-gray-400">
+        💡 Página dedicada com suporte a múltiplas imagens e logs detalhados
       </div>
       
       {/* Info sobre página dedicada */}
@@ -357,206 +255,12 @@ const MatchResultsManager: React.FC<MatchResultsManagerProps> = ({
         </p>
       </div>
 
-      {/* Battle Royale Processor */}
-      {showBattleRoyaleProcessor && (
-        <BattleRoyaleProcessor
-          teams={teams}
-          onResultsProcessed={handleBatchResultsProcessed}
-          disabled={isBatchProcessing || !geminiStatus.configured}
-        />
-      )}
-
-      {/* Batch Processor */}
-      {showBatchProcessor && (
-        <RankingBatchProcessor
-          teams={teams}
-          onResultsProcessed={handleBatchResultsProcessed}
-          disabled={isBatchProcessing || !geminiStatus.configured}
-        />
-      )}
+      {/* Componentes removidos - interface simplificada */}
 
 
 
-      {/* Results List */}
-      <div className="border rounded-lg p-4">
-        <h3 className="text-lg font-semibold mb-4">Resultados Processados ({results.length})</h3>
-        
-        {results.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">
-            Nenhum resultado processado ainda
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {results.map((result) => (
-              <div key={result.id} className="border rounded-lg p-4 bg-gray-50">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-4 mb-2">
-                      <h4 className="font-semibold text-lg">
-                        {result.teams?.name || `Time ${result.team_id}`}
-                      </h4>
-                      <div className="flex items-center gap-2">
-                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium">
-                          {result.placement}º lugar
-                        </span>
-                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm font-medium">
-                          {result.kills} kills
-                        </span>
-                        <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm font-medium">
-                          {result.total_points} pts
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
-                      <div>
-                        <span className="font-medium">Pontos Colocação:</span>
-                        <br />
-                        {result.placement_points}
-                      </div>
-                      <div>
-                        <span className="font-medium">Pontos Kills:</span>
-                        <br />
-                        {result.kill_points}
-                      </div>
-                      <div>
-                        <span className="font-medium">Confiança:</span>
-                        <br />
-                        {(result.confidence_score * 100).toFixed(1)}%
-                      </div>
-                      <div>
-                        <span className="font-medium">Processado:</span>
-                        <br />
-                        {new Date(result.processed_at).toLocaleString('pt-BR')}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 ml-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setEditingResult(result)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Tem certeza que deseja excluir este resultado? Esta ação não pode ser desfeita.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDeleteResult(result.id)}
-                            className="bg-red-600 hover:bg-red-700"
-                          >
-                            Excluir
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Seção de Resultados Processados removida - deve aparecer apenas no modal VER RESULTADOS */}
 
-      {/* Edit Dialog */}
-      {editingResult && (
-        <EditResultDialog
-          result={editingResult}
-          onSave={handleSaveEdit}
-          onCancel={() => setEditingResult(null)}
-        />
-      )}
-    </div>
-  );
-};
-
-// Edit Result Dialog Component
-interface EditResultDialogProps {
-  result: MatchResult;
-  onSave: (updates: Partial<MatchResult>) => void;
-  onCancel: () => void;
-}
-
-const EditResultDialog: React.FC<EditResultDialogProps> = ({ result, onSave, onCancel }) => {
-  const [placement, setPlacement] = useState(result.placement.toString());
-  const [kills, setKills] = useState(result.kills.toString());
-
-  const handleSave = () => {
-    const placementNum = parseInt(placement);
-    const killsNum = parseInt(kills);
-
-    if (isNaN(placementNum) || isNaN(killsNum) || placementNum < 1 || placementNum > 20 || killsNum < 0) {
-      return;
-    }
-
-    // Calculate points based on standard PUBG scoring
-    const placement_points = Math.max(0, 21 - placementNum);
-    const kill_points = killsNum;
-    const total_points = placement_points + kill_points;
-
-    onSave({
-      placement: placementNum,
-      kills: killsNum,
-      placement_points,
-      kill_points,
-      total_points
-    });
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <h3 className="text-lg font-semibold mb-4">Editar Resultado</h3>
-        
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="edit-placement">Colocação (1-20)</Label>
-            <Input
-              id="edit-placement"
-              type="number"
-              min="1"
-              max="20"
-              value={placement}
-              onChange={(e) => setPlacement(e.target.value)}
-            />
-          </div>
-          
-          <div>
-            <Label htmlFor="edit-kills">Kills</Label>
-            <Input
-              id="edit-kills"
-              type="number"
-              min="0"
-              value={kills}
-              onChange={(e) => setKills(e.target.value)}
-            />
-          </div>
-        </div>
-        
-        <div className="flex gap-2 mt-6">
-          <Button onClick={handleSave} className="flex-1">
-            Salvar
-          </Button>
-          <Button variant="outline" onClick={onCancel} className="flex-1">
-            Cancelar
-          </Button>
-        </div>
-      </div>
     </div>
   );
 };

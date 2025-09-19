@@ -9,8 +9,10 @@ import Layout from '../components/Layout';
 import BattleRoyaleProcessor from '../components/BattleRoyaleProcessor';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Trophy } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../integrations/supabase/client';
+import { useAuth } from '../hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { saveMatchResultDirect } from '../services/api';
 
 interface Team {
   id: string;
@@ -34,9 +36,11 @@ const BattleRoyaleProcessorPage: React.FC = () => {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [matchInfo, setMatchInfo] = useState<any>(null);
+  const [championshipType, setChampionshipType] = useState<string>('squad');
 
   // TESTE: Log simples para verificar se a página carrega
   console.log('🚀 TESTE: Battle Royale Processor Page iniciada');
@@ -76,6 +80,24 @@ const BattleRoyaleProcessorPage: React.FC = () => {
         if (!match.championship_id) {
           console.error('❌ ERRO CRÍTICO: championship_id não encontrado na partida!');
           throw new Error('Championship ID não encontrado na partida');
+        }
+
+        // Buscar informações do campeonato para obter o tipo
+        console.log('🔍 BUSCANDO INFORMAÇÕES DO CAMPEONATO:', match.championship_id);
+        const { data: championshipData, error: championshipError } = await supabase
+          .from('championships')
+          .select('tipo_campeonato')
+          .eq('id', match.championship_id)
+          .single();
+
+        if (championshipError) {
+          console.error('❌ ERRO ao buscar campeonato:', championshipError);
+          // Usar fallback se não conseguir buscar
+          setChampionshipType('squad');
+        } else {
+          console.log('✅ CAMPEONATO ENCONTRADO:', championshipData);
+          console.log('🎯 TIPO DO CAMPEONATO:', championshipData.tipo_campeonato);
+          setChampionshipType(championshipData.tipo_campeonato || 'squad');
         }
 
         // Buscar times do campeonato - ORDENAÇÃO CONSISTENTE POR ID
@@ -143,37 +165,59 @@ const BattleRoyaleProcessorPage: React.FC = () => {
   const handleResultsProcessed = async (results: ProcessedResult[]) => {
     console.log('💾 TESTE: Salvando resultados:', results.length);
     try {
-      // Salvar resultados no banco
-      const resultsToSave = results.map(result => ({
-        match_id: matchId,
-        team_id: result.teamId,
-        placement: result.placement,
-        kills: result.kills,
-        placement_points: result.placementPoints,
-        kill_points: result.killPoints,
-        total_points: result.totalPoints,
-        confidence_score: result.confidence,
-        processed_at: new Date().toISOString()
-      }));
-
-      const { error } = await supabase
-        .from('match_results')
-        .insert(resultsToSave);
-
-      if (error) {
-        console.error('❌ TESTE: Erro ao salvar:', error);
-        throw error;
+      if (!user) {
+        throw new Error('Usuário não autenticado');
       }
 
-      console.log('✅ TESTE: Resultados salvos com sucesso!');
+      if (!matchId) {
+        throw new Error('ID da partida não encontrado');
+      }
+
+      console.log('🚀 USANDO UPSERT: Salvando resultados com função otimizada...');
+      
+      // 🚀 SOLUÇÃO ROBUSTA: Usar a função saveMatchResultDirect que implementa UPSERT
+      const savePromises = results.map(async (result) => {
+        console.log(`💾 Salvando resultado para team: ${result.teamId}`);
+        
+        const resultData = {
+          placement: result.placement,
+          kills: result.kills,
+          placement_points: result.placementPoints,
+          kill_points: result.killPoints,
+          total_points: result.totalPoints,
+          confidence_score: result.confidence || 0.9
+        };
+        
+        const { data, error } = await saveMatchResultDirect(matchId, result.teamId, resultData);
+        
+        if (error) {
+          console.error(`❌ ERRO ao salvar team ${result.teamId}:`, error);
+          throw error;
+        }
+        
+        console.log(`✅ Team ${result.teamId} salvo com sucesso:`, data);
+        return data;
+      });
+
+      // Aguardar todos os salvamentos
+      await Promise.all(savePromises);
+
+      console.log('✅ TESTE: Todos os resultados salvos com sucesso!');
       toast({
         title: "Resultados Salvos!",
-        description: `${results.length} resultados foram processados e salvos com sucesso.`,
+        description: `${results.length} resultados foram processados e salvos com sucesso usando UPSERT.`,
         variant: "default"
       });
 
-      // Voltar para a página da partida
-      navigate(-1);
+      // 🎯 CORREÇÃO: Redirecionar para Championship com modal de resultados aberto
+      // Extrair championship_id da URL ou usar o matchInfo
+      if (matchInfo?.championship_id) {
+        // Navegar para Championship com parâmetro para abrir modal de resultados
+        navigate(`/championship/${matchInfo.championship_id}?openResults=${matchId}`);
+      } else {
+        // Fallback: voltar para a página anterior
+        navigate(-1);
+      }
     } catch (error) {
       console.error('❌ TESTE: Erro ao salvar resultados:', error);
       toast({
@@ -242,6 +286,7 @@ const BattleRoyaleProcessorPage: React.FC = () => {
             teams={teams}
             onResultsProcessed={handleResultsProcessed}
             disabled={false}
+            championshipType={championshipType}
           />
         </div>
 
@@ -251,6 +296,7 @@ const BattleRoyaleProcessorPage: React.FC = () => {
           <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
             <p>• Match ID: {matchId}</p>
             <p>• Teams carregados: {teams.length}</p>
+            <p>• Tipo de campeonato: {championshipType}</p>
             <p>• Console logs ativos: ✅</p>
             <p>• Página dedicada: ✅</p>
           </div>
