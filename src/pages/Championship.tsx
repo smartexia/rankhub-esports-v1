@@ -8,6 +8,7 @@ import ChampionshipMatchManager from '../components/ChampionshipMatchManager';
 import RankingSystem from '../components/RankingSystem';
 import MatchResultsManager from '../components/MatchResultsManager';
 import { EditChampionshipDialog } from '../components/EditChampionshipDialog';
+import { ChampionshipScoringConfig } from '../components/ChampionshipScoringConfig';
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -555,10 +556,11 @@ export default function Championship() {
           />
         )}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
+          <TabsList className="grid w-full grid-cols-5 lg:w-[600px]">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="teams">Times</TabsTrigger>
             <TabsTrigger value="ranking">Ranking</TabsTrigger>
+            <TabsTrigger value="pontuacao">Pontuação</TabsTrigger>
             <TabsTrigger value="matches" className="relative">
               Matches
               {matchesAwaitingPrints.length > 0 && (
@@ -664,6 +666,34 @@ export default function Championship() {
               championshipId={championship.id} 
               championshipName={championship.nome}
             />
+          </TabsContent>
+
+          <TabsContent value="pontuacao" className="space-y-6">
+            <Card className="bg-gradient-dark border-primary/20">
+              <CardHeader>
+                <CardTitle className="font-orbitron flex items-center gap-2">
+                  <Target className="h-6 w-6 text-primary" />
+                  Configuração de Pontuação
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Configure as regras de pontuação para este campeonato. As alterações afetarão apenas as próximas partidas.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <ChampionshipScoringConfig
+                  championshipId={championship.id}
+                  initialScoringRules={championship.regras_pontuacao}
+                  maxTeams={(() => {
+                    const tipo = championship.tipo_campeonato;
+                    if (tipo === 'individual') return 100;
+                    if (tipo === 'duplas') return 50;
+                    if (tipo === 'trios') return 33;
+                    if (tipo === 'squad') return 25;
+                    return 25;
+                  })()}
+                />
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="matches" className="space-y-6">

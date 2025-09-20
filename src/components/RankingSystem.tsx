@@ -417,14 +417,16 @@ export default function RankingSystem({ championshipId, championshipName = 'Camp
                   {/* 2º Lugar - Esquerda */}
                   {rankings[1] && (
                     <div className="flex flex-col items-center">
-                      <div className="text-center p-6 bg-gradient-to-b from-slate-300 to-slate-500 rounded-lg border-2 border-slate-400 shadow-lg transform transition-all hover:scale-105" style={{height: '180px', width: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between'}}>
-                        <div className="flex items-center justify-center mb-2">
-                          <Medal className="h-10 w-10 text-slate-300" />
+                      <div className="text-center p-6 bg-gradient-to-b from-slate-300 to-slate-500 rounded-lg border-2 border-slate-400 shadow-lg transform transition-all hover:scale-105 overflow-hidden" style={{height: '200px', width: '280px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between'}}>
+                        <div className="flex items-center justify-center mb-2 flex-shrink-0">
+                          <Medal className="h-8 w-8 text-slate-300" />
                         </div>
-                        <div>
-                          <h3 className="font-bold text-xl text-white">{rankings[1].team.nome_time}</h3>
-                          <p className="text-sm text-slate-200 mb-1">{rankings[1].team.nome_line}</p>
-                          <p className="text-3xl font-bold text-white">{rankings[1].totalPoints} pts</p>
+                        <div className="flex-1 flex flex-col justify-center px-4 min-h-0">
+                          <h3 className="font-bold text-lg text-white leading-tight mb-1 break-words" style={{wordBreak: 'break-word', lineHeight: '1.2'}} title={rankings[1].team.nome_time}>{rankings[1].team.nome_time}</h3>
+                          <div className="text-xs text-slate-200 mb-2" style={{minHeight: '16px'}}>
+                            {rankings[1].team.nome_line || ''}
+                          </div>
+                          <p className="text-2xl font-bold text-white">{rankings[1].totalPoints} pts</p>
                         </div>
                       </div>
                       <div className="bg-slate-400 text-white font-bold text-lg px-6 py-2 rounded-b-lg">
@@ -436,14 +438,16 @@ export default function RankingSystem({ championshipId, championshipName = 'Camp
                   {/* 1º Lugar - Centro (Mais Alto) */}
                   {rankings[0] && (
                     <div className="flex flex-col items-center">
-                      <div className="text-center p-8 bg-gradient-to-b from-yellow-300 to-yellow-600 rounded-lg border-2 border-yellow-500 shadow-xl transform transition-all hover:scale-105" style={{height: '220px', width: '220px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between'}}>
-                        <div className="flex items-center justify-center mb-3">
-                          <Trophy className="h-12 w-12 text-yellow-100 animate-pulse" />
+                      <div className="text-center p-8 bg-gradient-to-b from-yellow-300 to-yellow-600 rounded-lg border-2 border-yellow-500 shadow-xl transform transition-all hover:scale-105 overflow-hidden" style={{height: '240px', width: '320px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between'}}>
+                        <div className="flex items-center justify-center mb-3 flex-shrink-0">
+                          <Trophy className="h-10 w-10 text-yellow-100 animate-pulse" />
                         </div>
-                        <div>
-                          <h3 className="font-bold text-2xl text-white">{rankings[0].team.nome_time}</h3>
-                          <p className="text-sm text-yellow-100 mb-1">{rankings[0].team.nome_line}</p>
-                          <p className="text-4xl font-bold text-white">{rankings[0].totalPoints} pts</p>
+                        <div className="flex-1 flex flex-col justify-center px-5 min-h-0">
+                          <h3 className="font-bold text-xl text-white leading-tight mb-1 break-words" style={{wordBreak: 'break-word', lineHeight: '1.2'}} title={rankings[0].team.nome_time}>{rankings[0].team.nome_time}</h3>
+                          <div className="text-sm text-yellow-100 mb-2" style={{minHeight: '20px'}}>
+                            {rankings[0].team.nome_line || ''}
+                          </div>
+                          <p className="text-3xl font-bold text-white">{rankings[0].totalPoints} pts</p>
                         </div>
                       </div>
                       <div className="bg-yellow-500 text-white font-bold text-xl px-8 py-3 rounded-b-lg">
@@ -455,14 +459,16 @@ export default function RankingSystem({ championshipId, championshipName = 'Camp
                   {/* 3º Lugar - Direita */}
                   {rankings[2] && (
                     <div className="flex flex-col items-center">
-                      <div className="text-center p-6 bg-gradient-to-b from-amber-600 to-amber-800 rounded-lg border-2 border-amber-700 shadow-lg transform transition-all hover:scale-105" style={{height: '160px', width: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between'}}>
-                        <div className="flex items-center justify-center mb-2">
-                          <Award className="h-8 w-8 text-amber-300" />
+                      <div className="text-center p-5 bg-gradient-to-b from-amber-600 to-amber-800 rounded-lg border-2 border-amber-700 shadow-lg transform transition-all hover:scale-105 overflow-hidden" style={{height: '180px', width: '300px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between'}}>
+                        <div className="flex items-center justify-center mb-2 flex-shrink-0">
+                          <Award className="h-6 w-6 text-amber-300" />
                         </div>
-                        <div>
-                          <h3 className="font-bold text-xl text-white">{rankings[2].team.nome_time}</h3>
-                          <p className="text-sm text-amber-200 mb-1">{rankings[2].team.nome_line}</p>
-                          <p className="text-3xl font-bold text-white">{rankings[2].totalPoints} pts</p>
+                        <div className="flex-1 flex flex-col justify-center px-4 min-h-0">
+                          <h3 className="font-bold text-lg text-white leading-tight mb-1 break-words" style={{wordBreak: 'break-word', lineHeight: '1.2'}} title={rankings[2].team.nome_time}>{rankings[2].team.nome_time}</h3>
+                          <div className="text-xs text-amber-200 mb-2" style={{minHeight: '16px'}}>
+                            {rankings[2].team.nome_line || ''}
+                          </div>
+                          <p className="text-2xl font-bold text-white">{rankings[2].totalPoints} pts</p>
                         </div>
                       </div>
                       <div className="bg-amber-700 text-white font-bold text-lg px-6 py-2 rounded-b-lg">

@@ -9,6 +9,7 @@ import { Edit, Trophy, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { ChampionshipScoringConfig } from "./ChampionshipScoringConfig";
 
 interface Championship {
   id: string;
@@ -20,6 +21,7 @@ interface Championship {
   premiacao?: string;
   status: string;
   tenant_id: string;
+  regras_pontuacao?: any;
 }
 
 interface EditChampionshipDialogProps {
@@ -42,6 +44,13 @@ export function EditChampionshipDialog({ championship, onChampionshipUpdated, tr
     startDate: "",
     startTime: "19:00",
     prize: ""
+  });
+  const [scoringRules, setScoringRules] = useState({
+    posicao: {
+      "1": 20, "2": 15, "3": 12, "4": 10, "5": 8,
+      "6": 6, "7": 5, "8": 4, "9": 3, "10": 2
+    },
+    kill: 1
   });
 
   // Função para calcular o máximo de times baseado no tipo de campeonato
@@ -85,6 +94,19 @@ export function EditChampionshipDialog({ championship, onChampionshipUpdated, tr
         startTime: championship.horario_inicio || "19:00",
         prize: championship.premiacao || ""
       });
+      
+      // Carregar regras de pontuação existentes ou usar padrão
+      if (championship.regras_pontuacao) {
+        setScoringRules(championship.regras_pontuacao);
+      } else {
+        setScoringRules({
+          posicao: {
+            "1": 20, "2": 15, "3": 12, "4": 10, "5": 8,
+            "6": 6, "7": 5, "8": 4, "9": 3, "10": 2
+          },
+          kill: 1
+        });
+      }
     }
   }, [open, championship]);
 
@@ -126,6 +148,7 @@ export function EditChampionshipDialog({ championship, onChampionshipUpdated, tr
         horario_inicio: formData.startTime || null,
         tipo_campeonato: formData.championshipType,
         premiacao: formData.prize || null,
+        regras_pontuacao: scoringRules,
         updated_at: new Date().toISOString()
       };
 
@@ -250,6 +273,18 @@ export function EditChampionshipDialog({ championship, onChampionshipUpdated, tr
                 value={formData.prize}
                 onChange={(e) => setFormData({ ...formData, prize: e.target.value })}
                 className="bg-secondary/50 border-border/50 focus:border-primary"
+              />
+            </div>
+
+            {/* Configuração de Pontuação */}
+            <div className="space-y-2">
+              <Label className="font-rajdhani font-medium">
+                Configuração de Pontuação
+              </Label>
+              <ChampionshipScoringConfig
+                scoringRules={scoringRules}
+                onScoringRulesChange={setScoringRules}
+                maxTeams={parseInt(formData.maxTeams)}
               />
             </div>
 

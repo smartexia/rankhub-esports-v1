@@ -8,10 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, FileImage, X, Check, Trophy, Target, Zap, Star, Eye, Save, AlertTriangle } from 'lucide-react';
+import { Loader2, Upload, FileImage, X, Check, Trophy, Target, Zap, Star, Eye, Save, AlertTriangle, Plus, Trash2, ChevronDown, ChevronUp, Edit } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 interface Team {
   id: string;
@@ -37,6 +40,18 @@ interface ProcessedResult {
   killPoints: number;
   totalPoints: number;
   confidence: number;
+  isEdited?: boolean;
+}
+
+interface ManualResult {
+  id: string;
+  teamId: string;
+  teamName: string;
+  placement: number;
+  kills: number;
+  placementPoints: number;
+  killPoints: number;
+  totalPoints: number;
 }
 
 interface BattleRoyaleProcessorProps {
@@ -44,6 +59,10 @@ interface BattleRoyaleProcessorProps {
   onResultsProcessed: (results: ProcessedResult[]) => void;
   disabled?: boolean;
   championshipType?: string; // Tipo do campeonato (squad, duplas, individual, trios)
+  scoringRules?: {
+    posicao: Record<string, number>;
+    kill: number;
+  };
 }
 
 // Battle Royale scoring system - DINÂMICO: Suporta Squad (25), Duo (50) e Solo (100)
@@ -87,11 +106,19 @@ const BattleRoyaleProcessor: React.FC<BattleRoyaleProcessorProps> = ({
   teams,
   onResultsProcessed,
   disabled = false,
-  championshipType = 'squad'
+  championshipType = 'squad',
+  scoringRules
 }) => {
   // Determinar número máximo de times baseado no tipo de campeonato
   const maxTeams = getMaxTeamsByType(championshipType);
-  const BATTLE_ROYALE_SCORING = getBattleRoyaleScoring(maxTeams);
+  
+  // Usar regras de pontuação personalizadas ou fallback para padrão
+  const BATTLE_ROYALE_SCORING = scoringRules ? {
+    position: Object.fromEntries(
+      Object.entries(scoringRules.posicao).map(([key, value]) => [parseInt(key), value])
+    ),
+    killPoints: scoringRules.kill
+  } : getBattleRoyaleScoring(maxTeams);
   // 🚀 TESTE: Logs simples para verificar se o componente carrega
   console.log('🎯 TESTE: BattleRoyaleProcessor iniciado');
   console.log('📊 TESTE: Teams recebidos:', teams?.length || 0);
@@ -107,6 +134,20 @@ const BattleRoyaleProcessor: React.FC<BattleRoyaleProcessorProps> = ({
   const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
   const [totalImages, setTotalImages] = useState<number>(0);
   const { toast } = useToast();
+
+  // Estados para entrada manual de resultados
+  const [manualResults, setManualResults] = useState<ManualResult[]>([]);
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [manualForm, setManualForm] = useState({
+    teamId: '',
+    placement: '',
+    kills: ''
+  });
+
+  // Estados para edição de resultados
+  const [editingResult, setEditingResult] = useState<{imageIndex: number, resultIndex: number} | null>(null);
+  const [editForm, setEditForm] = useState<{placement: number, kills: number}>({placement: 1, kills: 0});
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Cache para evitar reprocessar as mesmas imagens
   const getCacheKey = (file: File) => {
@@ -137,6 +178,205 @@ const BattleRoyaleProcessor: React.FC<BattleRoyaleProcessorProps> = ({
     } catch (error) {
       console.warn(`⚠️ CACHE ERROR: Não foi possível salvar cache para ${file.name}`);
     }
+  };
+
+  // Funções para gerenciar entrada manual de resultados
+  const calculateManualPoints = (placement: number, kills: number) => {
+    const placementPoints = BATTLE_ROYALE_SCORING.position[placement as keyof typeof BATTLE_ROYALE_SCORING.position] || 0;
+    const killPoints = kills * BATTLE_ROYALE_SCORING.killPoints;
+    return { placementPoints, killPoints, totalPoints: placementPoints + killPoints };
+  };
+
+  const addManualResult = () => {
+    const { teamId, placement, kills } = manualForm;
+    
+    // Validações
+    if (!teamId) {
+      toast({
+        title: "Erro de Validação",
+        description: "Selecione uma equipe",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const placementNum = parseInt(placement);
+    const killsNum = parseInt(kills) || 0;
+
+    if (!placementNum || placementNum < 1 || placementNum > maxTeams) {
+      toast({
+        title: "Erro de Validação",
+        description: `Posição deve ser entre 1 e ${maxTeams}`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Verificar se a equipe já foi adicionada
+    if (manualResults.some(result => result.teamId === teamId)) {
+      toast({
+        title: "Erro de Validação",
+        description: "Esta equipe já foi adicionada manualmente",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Verificar se a posição já foi usada
+    if (manualResults.some(result => result.placement === placementNum)) {
+      toast({
+        title: "Erro de Validação",
+        description: "Esta posição já foi usada",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const selectedTeam = teams.find(team => team.id === teamId);
+    if (!selectedTeam) return;
+
+    const points = calculateManualPoints(placementNum, killsNum);
+    
+    const newManualResult: ManualResult = {
+      id: `manual_${Date.now()}`,
+      teamId,
+      teamName: selectedTeam.name,
+      placement: placementNum,
+      kills: killsNum,
+      placementPoints: points.placementPoints,
+      killPoints: points.killPoints,
+      totalPoints: points.totalPoints
+    };
+
+    setManualResults(prev => [...prev, newManualResult].sort((a, b) => a.placement - b.placement));
+    
+    // Limpar formulário
+    setManualForm({ teamId: '', placement: '', kills: '' });
+    
+    toast({
+      title: "Resultado Adicionado!",
+      description: `${selectedTeam.name} adicionado em ${placementNum}º lugar`,
+      variant: "default"
+    });
+
+    console.log(`📝 MANUAL: Adicionado ${selectedTeam.name} - ${placementNum}º lugar - ${killsNum} kills`);
+  };
+
+  const removeManualResult = (id: string) => {
+    const result = manualResults.find(r => r.id === id);
+    setManualResults(prev => prev.filter(r => r.id !== id));
+    
+    if (result) {
+      toast({
+        title: "Resultado Removido",
+        description: `${result.teamName} removido da lista manual`,
+        variant: "default"
+      });
+      console.log(`🗑️ MANUAL: Removido ${result.teamName}`);
+    }
+  };
+
+  const clearAllManualResults = () => {
+    setManualResults([]);
+    toast({
+      title: "Lista Limpa",
+      description: "Todos os resultados manuais foram removidos",
+      variant: "default"
+    });
+    console.log(`🧹 MANUAL: Lista de resultados manuais limpa`);
+  };
+
+  // Funções para edição de resultados
+  const startEditResult = (imageIndex: number, resultIndex: number) => {
+    const result = processedResults[imageIndex][resultIndex];
+    setEditingResult({ imageIndex, resultIndex });
+    setEditForm({ placement: result.placement, kills: result.kills });
+    setIsEditModalOpen(true);
+    console.log(`✏️ EDIT: Iniciando edição de ${result.teamName}`);
+  };
+
+  const cancelEdit = () => {
+    setEditingResult(null);
+    setEditForm({ placement: 1, kills: 0 });
+    setIsEditModalOpen(false);
+    console.log(`❌ EDIT: Edição cancelada`);
+  };
+
+  const saveEdit = () => {
+    if (!editingResult) return;
+
+    const { imageIndex, resultIndex } = editingResult;
+    const currentResult = processedResults[imageIndex][resultIndex];
+    const newPlacement = editForm.placement;
+    const newKills = editForm.kills;
+
+    // Validações
+    if (newPlacement < 1 || newPlacement > maxTeams) {
+      toast({
+        title: "Erro de Validação",
+        description: `Posição deve ser entre 1 e ${maxTeams}`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (newKills < 0) {
+      toast({
+        title: "Erro de Validação",
+        description: "Kills não pode ser negativo",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Verificar se a nova posição já está sendo usada por outra equipe
+    const allResults = processedResults.flat();
+    const conflictingResult = allResults.find((result, idx) => {
+      const globalIndex = processedResults[0].length * imageIndex + resultIndex;
+      return result.placement === newPlacement && idx !== globalIndex;
+    });
+
+    if (conflictingResult) {
+      toast({
+        title: "Conflito de Posição",
+        description: `A posição ${newPlacement} já está sendo usada por ${conflictingResult.teamName}`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Recalcular pontos
+    const placementPoints = BATTLE_ROYALE_SCORING.position[newPlacement as keyof typeof BATTLE_ROYALE_SCORING.position] || 0;
+    const killPoints = newKills * BATTLE_ROYALE_SCORING.killPoints;
+    const totalPoints = placementPoints + killPoints;
+
+    // Atualizar resultado
+    const updatedResults = [...processedResults];
+    updatedResults[imageIndex][resultIndex] = {
+      ...currentResult,
+      placement: newPlacement,
+      kills: newKills,
+      placementPoints,
+      killPoints,
+      totalPoints,
+      isEdited: true // Marcar como editado
+    };
+
+    // Reordenar por posição
+    updatedResults[imageIndex].sort((a, b) => a.placement - b.placement);
+
+    setProcessedResults(updatedResults);
+    setIsEditModalOpen(false);
+    setEditingResult(null);
+    setEditForm({ placement: 1, kills: 0 });
+
+    toast({
+      title: "Resultado Editado!",
+      description: `${currentResult.teamName} atualizado para ${newPlacement}º lugar com ${newKills} kills`,
+      variant: "default"
+    });
+
+    console.log(`✅ EDIT: ${currentResult.teamName} editado - ${newPlacement}º lugar, ${newKills} kills, ${totalPoints} pts`);
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -292,13 +532,31 @@ Para cada equipe, identifique:
 - Nome da equipe (EQUIPE1, EQUIPE2, etc.)
 - Número de kills/baixas (coluna BAIXAS)
 
-IMPORTANTE:
-- Extraia dados de TODAS as equipes visíveis (máximo ${maxTeams} equipes)
-- Se algum valor não estiver visível, use 0
-- Posições devem ser números de 1 a ${maxTeams} APENAS
-- Nomes das equipes devem manter o formato original
-- Responda APENAS em JSON válido, sem texto adicional
-- IGNORE equipes com posição superior a ${maxTeams}
+IMPORTANTE - REGRAS OBRIGATÓRIAS:
+🥇 SEMPRE extrair a posição 1º lugar PRIMEIRO - É OBRIGATÓRIO!
+📋 NÃO pule nenhuma posição, especialmente a primeira
+🔢 Posições devem ser sequenciais: 1, 2, 3, 4, 5...
+📊 Se a posição 1 não estiver visível claramente, procure no topo da imagem
+🎯 Extraia dados de TODAS as equipes visíveis (máximo ${maxTeams} equipes)
+⚠️ Se algum valor não estiver visível, use 0 para kills
+🏷️ Nomes das equipes devem manter o formato original (EQUIPE8, EQUIPE23, etc.)
+✅ Responda APENAS em JSON válido, sem texto adicional
+❌ IGNORE equipes com posição superior a ${maxTeams}
+
+ESTRUTURA DA IMAGEM:
+- O ranking está organizado em colunas
+- Primeira coluna: Posição (1º, 2º, 3º...)
+- Segunda coluna: Nome da equipe (EQUIPE8, EQUIPE23...)
+- Terceira coluna: Kills/Baixas (números)
+
+EXEMPLO DE SAÍDA ESPERADA:
+{
+  "teams": [
+    {"position": 1, "teamName": "EQUIPE8", "kills": 11},
+    {"position": 2, "teamName": "EQUIPE23", "kills": 4},
+    {"position": 3, "teamName": "EQUIPE5", "kills": 2}
+  ]
+}
 
 Formato de resposta:
 {
@@ -456,51 +714,62 @@ Formato de resposta:
       console.log(`🔍 CORRELACIONANDO POR POSIÇÃO: "${data.teamName}" (posição ${data.position})`);
       console.log(`📋 EQUIPES DISPONÍVEIS (${teams.length}):`, teams.map((t, i) => `${i+1}. ${t.name} → EQUIPE${i+1}`));
       
-      // NOVA LÓGICA: Correlação baseada na POSIÇÃO, não na tag manual
-      // EQUIPE1 (print) → primeira equipe da lista ordenada
-      // EQUIPE2 (print) → segunda equipe da lista ordenada
+      // 🚀 NOVA LÓGICA CORRIGIDA: Correlação baseada na TAG da equipe
+      // EQUIPE8 (print) → buscar team onde team.tag === 'EQUIPE8'
+      // EQUIPE23 (print) → buscar team onde team.tag === 'EQUIPE23'
       // etc.
       
-      const extractedNameLower = data.teamName.toLowerCase();
+      const extractedTeamName = data.teamName; // Manter formato original (EQUIPE8, EQUIPE23, etc.)
       let matchingTeam: Team | undefined;
       
-      // Extrair número da equipe do nome (EQUIPE1 → 1, EQUIPE2 → 2, etc.)
-      const teamNumberMatch = extractedNameLower.match(/equipe(\d+)/);
+      console.log(`🎯 BUSCANDO EQUIPE POR TAG: "${extractedTeamName}"`);
       
-      if (teamNumberMatch) {
-        const teamNumber = parseInt(teamNumberMatch[1]);
-        const teamIndex = teamNumber - 1; // Converter para índice (EQUIPE1 → índice 0)
-        
-        console.log(`🎯 NÚMERO EXTRAÍDO: EQUIPE${teamNumber} → índice ${teamIndex}`);
-        
-        if (teamIndex >= 0 && teamIndex < teams.length) {
-          matchingTeam = teams[teamIndex];
-          console.log(`✅ CORRELAÇÃO POR POSIÇÃO: EQUIPE${teamNumber} → ${matchingTeam.name} (posição ${teamIndex + 1})`);
-        } else {
-          console.log(`❌ ÍNDICE FORA DO RANGE: ${teamIndex} (total de equipes: ${teams.length})`);
+      // Busca DIRETA por tag - SOLUÇÃO CORRETA
+      matchingTeam = teams.find(team => {
+        const tagMatch = team.tag === extractedTeamName;
+        if (tagMatch) {
+          console.log(`✅ CORRELAÇÃO POR TAG: ${extractedTeamName} → ${team.name} (tag: ${team.tag})`);
+          return true;
         }
-      } else {
-        console.log(`❌ FORMATO INVÁLIDO: "${data.teamName}" não segue o padrão EQUIPE{número}`);
+        return false;
+      });
+      
+      // Se não encontrou por tag, tentar fallbacks
+      if (!matchingTeam) {
+        console.log(`⚠️ NÃO ENCONTRADO POR TAG: "${extractedTeamName}", tentando fallbacks...`);
         
-        // Fallback: tentar correlação por nome (compatibilidade)
-        console.log(`🔄 FALLBACK: Tentando correlação por nome...`);
+        // Fallback 1: Busca case-insensitive por tag
+        const extractedNameLower = extractedTeamName.toLowerCase();
         matchingTeam = teams.find(team => {
-          const teamNameLower = team.name.toLowerCase();
-          
-          // Try exact match
-          if (teamNameLower === extractedNameLower) {
-            console.log(`✅ FALLBACK MATCH EXATO: ${team.name}`);
+          const tagLower = team.tag?.toLowerCase() || '';
+          if (tagLower === extractedNameLower) {
+            console.log(`✅ FALLBACK TAG CASE-INSENSITIVE: ${extractedTeamName} → ${team.name} (tag: ${team.tag})`);
             return true;
           }
-          
-          // Try partial match
-          if (teamNameLower.includes(extractedNameLower) || extractedNameLower.includes(teamNameLower)) {
-            console.log(`✅ FALLBACK MATCH PARCIAL: ${team.name}`);
-            return true;
-          }
-          
           return false;
         });
+        
+        // Fallback 2: Busca por nome da equipe (compatibilidade)
+        if (!matchingTeam) {
+          console.log(`🔄 FALLBACK: Tentando correlação por nome...`);
+          matchingTeam = teams.find(team => {
+            const teamNameLower = team.name.toLowerCase();
+            
+            // Try exact match
+            if (teamNameLower === extractedNameLower) {
+              console.log(`✅ FALLBACK MATCH EXATO POR NOME: ${team.name}`);
+              return true;
+            }
+            
+            // Try partial match
+            if (teamNameLower.includes(extractedNameLower) || extractedNameLower.includes(teamNameLower)) {
+              console.log(`✅ FALLBACK MATCH PARCIAL POR NOME: ${team.name}`);
+              return true;
+            }
+            
+            return false;
+          });
+        }
       }
       
       console.log(`🎯 RESULTADO DA BUSCA: ${matchingTeam ? `Encontrada: ${matchingTeam.name}` : 'NÃO ENCONTRADA'}`);
@@ -819,7 +1088,44 @@ Formato de resposta:
   const handleConfirmResults = () => {
     // Flatten all results from multiple images into a single array
     const flattenedResults = processedResults.flat();
-    onResultsProcessed(flattenedResults);
+    
+    // 🚀 NOVA FUNCIONALIDADE: Combinar resultados da IA com resultados manuais
+    const combinedResults = [...flattenedResults];
+    
+    // Adicionar resultados manuais que não conflitam com os da IA
+    manualResults.forEach(manualResult => {
+      // Verificar se já existe uma equipe com a mesma posição ou teamId
+      const hasPositionConflict = combinedResults.some(result => result.placement === manualResult.placement);
+      const hasTeamConflict = combinedResults.some(result => result.teamId === manualResult.teamId);
+      
+      if (!hasPositionConflict && !hasTeamConflict) {
+        // Converter ManualResult para ProcessedResult
+        const processedManualResult: ProcessedResult = {
+          teamId: manualResult.teamId,
+          teamName: manualResult.teamName,
+          placement: manualResult.placement,
+          kills: manualResult.kills,
+          placementPoints: manualResult.placementPoints,
+          killPoints: manualResult.killPoints,
+          totalPoints: manualResult.totalPoints,
+          confidence: 1.0 // Resultados manuais têm 100% de confiança
+        };
+        combinedResults.push(processedManualResult);
+        console.log(`✅ MANUAL: Adicionado resultado manual - ${manualResult.teamName} (${manualResult.placement}º lugar)`);
+      } else {
+        console.warn(`⚠️ MANUAL: Conflito detectado para ${manualResult.teamName} - posição ou equipe já existe`);
+      }
+    });
+    
+    // Ordenar resultados combinados por posição
+    const sortedCombinedResults = combinedResults.sort((a, b) => a.placement - b.placement);
+    
+    console.log(`🎯 COMBINAÇÃO FINAL:`);
+    console.log(`   - Resultados da IA: ${flattenedResults.length}`);
+    console.log(`   - Resultados manuais: ${manualResults.length}`);
+    console.log(`   - Total combinado: ${sortedCombinedResults.length}`);
+    
+    onResultsProcessed(sortedCombinedResults);
     
     // Reset form
     removeFile();
@@ -829,9 +1135,17 @@ Formato de resposta:
     setCurrentImageIndex(0);
     setTotalImages(0);
     
+    // Limpar resultados manuais após salvar
+    setManualResults([]);
+    setManualForm({ teamId: '', placement: '', kills: '' });
+    
+    const totalResults = sortedCombinedResults.length;
+    const manualCount = manualResults.length;
+    const aiCount = flattenedResults.length;
+    
     toast({
       title: "Resultados Salvos!",
-      description: `Resultados de ${processedResults.length} imagens salvos com sucesso`,
+      description: `${totalResults} equipes salvas (${aiCount} da IA + ${manualCount} manuais)`,
       variant: "default"
     });
   };
@@ -955,6 +1269,8 @@ Formato de resposta:
               </div>
             </div>
 
+
+
             {/* Images Preview */}
             {previewUrls.length > 0 && (
               <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-950/20 rounded-xl p-6 border-2 border-blue-200">
@@ -1055,23 +1371,42 @@ Formato de resposta:
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {imageResults.map((result, index) => {
-                        // Encontrar a equipe correspondente para obter sua posição na lista
+                        // 🚀 CORREÇÃO: Usar a tag da equipe em vez da posição na lista
                         const matchingTeam = teams.find(team => team.id === result.teamId);
-                        const teamIndex = matchingTeam ? teams.findIndex(team => team.id === result.teamId) : -1;
-                        const autoIdentifier = teamIndex >= 0 ? `EQUIPE${teamIndex + 1}` : result.teamName;
+                        const autoIdentifier = matchingTeam?.tag || result.teamName;
                         
                         return (
-                          <div key={index} className="bg-white dark:bg-gray-800 rounded-lg p-4 border-2 border-green-300 shadow-md">
+                          <div key={index} className={`bg-white dark:bg-gray-800 rounded-lg p-4 border-2 shadow-md ${
+                            result.isEdited ? 'border-orange-300 bg-orange-50 dark:bg-orange-950/20' : 'border-green-300'
+                          }`}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex flex-col">
-                                <h4 className="font-bold text-gray-800 dark:text-gray-200">{matchingTeam?.name || result.teamName}</h4>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-bold text-gray-800 dark:text-gray-200">{matchingTeam?.name || result.teamName}</h4>
+                                  {result.isEdited && (
+                                    <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-200 text-xs">
+                                      ✏️ Editado
+                                    </Badge>
+                                  )}
+                                </div>
                                 <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs w-fit mt-1">
                                   {autoIdentifier}
                                 </Badge>
                               </div>
-                              <Badge variant="secondary" className="bg-green-100 text-green-800">
-                                {result.placement}º
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  onClick={() => startEditResult(imageIndex, index)}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 p-1"
+                                  title="Editar resultado"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Badge variant="secondary" className="bg-green-100 text-green-800">
+                                  {result.placement}º
+                                </Badge>
+                              </div>
                             </div>
                             <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                               <div className="flex justify-between">
@@ -1104,6 +1439,220 @@ Formato de resposta:
               </div>
             </div>
 
+            {/* Manual Entry Section - Após Processamento */}
+            <Collapsible open={showManualEntry} onOpenChange={setShowManualEntry}>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-xl border-2 border-blue-200">
+                <CollapsibleTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="w-full p-6 justify-between text-left hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded-xl"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="bg-blue-100 dark:bg-blue-800 rounded-full p-2">
+                        <Plus className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-blue-800 dark:text-blue-200 text-lg">📝 Completar Resultados Manualmente</h4>
+                        <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                          {(() => {
+                            const totalProcessed = processedResults.flat().length;
+                            const availablePositions = maxTeams - totalProcessed - manualResults.length;
+                            return availablePositions > 0 
+                              ? `${availablePositions} posições disponíveis para completar o ranking`
+                              : `Ranking completo • ${manualResults.length} equipes adicionadas manualmente`;
+                          })()} 
+                        </p>
+                      </div>
+                    </div>
+                    {showManualEntry ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                  </Button>
+                </CollapsibleTrigger>
+                
+                <CollapsibleContent className="px-6 pb-6">
+                  <div className="space-y-4">
+                    {/* Informações sobre posições disponíveis */}
+                    <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Target className="h-4 w-4 text-blue-600" />
+                        <span className="font-medium text-blue-800 dark:text-blue-200">Status do Ranking</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="text-blue-600 dark:text-blue-400">Processadas pela IA:</span>
+                          <p className="font-medium text-blue-800 dark:text-blue-200">{processedResults.flat().length} equipes</p>
+                        </div>
+                        <div>
+                          <span className="text-blue-600 dark:text-blue-400">Adicionadas manualmente:</span>
+                          <p className="font-medium text-blue-800 dark:text-blue-200">{manualResults.length} equipes</p>
+                        </div>
+                        <div>
+                          <span className="text-blue-600 dark:text-blue-400">Posições restantes:</span>
+                          <p className="font-medium text-blue-800 dark:text-blue-200">
+                            {Math.max(0, maxTeams - processedResults.flat().length - manualResults.length)} de {maxTeams}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Manual Entry Form */}
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-blue-200">
+                      <h5 className="font-medium text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+                        <Plus className="h-4 w-4" />
+                        Adicionar Equipe ao Ranking
+                      </h5>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        {/* Team Selection */}
+                        <div className="md:col-span-2">
+                          <Label htmlFor="manual-team" className="text-sm font-medium">Equipe</Label>
+                          <Select value={manualForm.teamId} onValueChange={(value) => setManualForm(prev => ({ ...prev, teamId: value }))}>
+                            <SelectTrigger className="mt-1">
+                              <SelectValue placeholder="Selecione uma equipe" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {teams
+                                .filter(team => {
+                                  // Filtrar equipes já processadas pela IA
+                                  const processedTeamIds = processedResults.flat().map(r => r.teamId);
+                                  // Filtrar equipes já adicionadas manualmente
+                                  const manualTeamIds = manualResults.map(r => r.teamId);
+                                  return !processedTeamIds.includes(team.id) && !manualTeamIds.includes(team.id);
+                                })
+                                .map(team => (
+                                <SelectItem key={team.id} value={team.id}>
+                                  {team.name} ({team.tag})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        {/* Placement Input */}
+                        <div>
+                          <Label htmlFor="manual-placement" className="text-sm font-medium">Posição</Label>
+                          <Input
+                            id="manual-placement"
+                            type="number"
+                            min="1"
+                            max={maxTeams}
+                            placeholder={(() => {
+                              // Sugerir próxima posição disponível
+                              const usedPositions = [
+                                ...processedResults.flat().map(r => r.placement),
+                                ...manualResults.map(r => r.placement)
+                              ].sort((a, b) => a - b);
+                              
+                              for (let i = 1; i <= maxTeams; i++) {
+                                if (!usedPositions.includes(i)) {
+                                  return i.toString();
+                                }
+                              }
+                              return "1";
+                            })()}
+                            value={manualForm.placement}
+                            onChange={(e) => setManualForm(prev => ({ ...prev, placement: e.target.value }))}
+                            className="mt-1"
+                          />
+                        </div>
+                        
+                        {/* Kills Input */}
+                        <div>
+                          <Label htmlFor="manual-kills" className="text-sm font-medium">Kills</Label>
+                          <Input
+                            id="manual-kills"
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            value={manualForm.kills}
+                            onChange={(e) => setManualForm(prev => ({ ...prev, kills: e.target.value }))}
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="flex gap-2 mt-4">
+                        <Button
+                          onClick={addManualResult}
+                          disabled={!manualForm.teamId || !manualForm.placement}
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Adicionar ao Ranking
+                        </Button>
+                        
+                        {manualResults.length > 0 && (
+                          <Button
+                            onClick={clearAllManualResults}
+                            variant="outline"
+                            className="text-red-600 border-red-300 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Limpar Manuais
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Manual Results List */}
+                    {manualResults.length > 0 && (
+                      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-blue-200">
+                        <h5 className="font-medium text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+                          <Trophy className="h-4 w-4" />
+                          Equipes Adicionadas Manualmente ({manualResults.length})
+                        </h5>
+                        
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {manualResults.map((result) => (
+                            <div key={result.id} className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200">
+                              <div className="flex items-center gap-3">
+                                <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                                  {result.placement}º
+                                </Badge>
+                                <div>
+                                  <p className="font-medium text-gray-800 dark:text-gray-200">{result.teamName}</p>
+                                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    {result.kills} kills • {result.totalPoints} pts
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <Button
+                                onClick={() => removeManualResult(result.id)}
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Preview Combinado */}
+                    {manualResults.length > 0 && (
+                      <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 rounded-lg p-4 border-2 border-purple-200">
+                        <h5 className="font-medium text-purple-800 dark:text-purple-200 mb-3 flex items-center gap-2">
+                          <Star className="h-4 w-4" />
+                          🏆 Preview do Ranking Final ({processedResults.flat().length + manualResults.length} equipes)
+                        </h5>
+                        
+                        <div className="text-sm text-purple-600 dark:text-purple-400 space-y-1">
+                          <p>• <strong>Resultados da IA:</strong> {processedResults.flat().length} equipes</p>
+                          <p>• <strong>Adicionadas manualmente:</strong> {manualResults.length} equipes</p>
+                          <p>• <strong>Total:</strong> {processedResults.flat().length + manualResults.length} de {maxTeams} equipes</p>
+                          {(processedResults.flat().length + manualResults.length) < maxTeams && (
+                            <p className="text-amber-600 dark:text-amber-400">⚠️ <strong>Atenção:</strong> Ainda faltam {maxTeams - processedResults.flat().length - manualResults.length} equipes para completar o ranking</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+
             {/* Action Buttons */}
             <div className="flex gap-4 justify-center">
               <Button
@@ -1125,6 +1674,90 @@ Formato de resposta:
           </div>
         )}
       </CardContent>
+
+      {/* Modal de Edição */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              Editar Resultado
+            </DialogTitle>
+          </DialogHeader>
+          
+          {editingResult && (
+            <div className="space-y-4">
+              <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                <p className="font-medium text-gray-800 dark:text-gray-200">
+                  {processedResults[editingResult.imageIndex][editingResult.resultIndex].teamName}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Editando resultado da equipe
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-placement">Posição</Label>
+                  <Input
+                    id="edit-placement"
+                    type="number"
+                    min="1"
+                    max={maxTeams}
+                    value={editForm.placement}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, placement: parseInt(e.target.value) || 1 }))}
+                    className="w-full"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="edit-kills">Kills</Label>
+                  <Input
+                    id="edit-kills"
+                    type="number"
+                    min="0"
+                    value={editForm.kills}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, kills: parseInt(e.target.value) || 0 }))}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+              
+              {/* Preview dos pontos */}
+              <div className="bg-blue-50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-200">
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Preview dos Pontos:</p>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Posição:</span>
+                    <p className="font-medium">{BATTLE_ROYALE_SCORING.position[editForm.placement as keyof typeof BATTLE_ROYALE_SCORING.position] || 0} pts</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Kills:</span>
+                    <p className="font-medium">{editForm.kills * BATTLE_ROYALE_SCORING.killPoints} pts</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Total:</span>
+                    <p className="font-bold text-purple-600">
+                      {(BATTLE_ROYALE_SCORING.position[editForm.placement as keyof typeof BATTLE_ROYALE_SCORING.position] || 0) + (editForm.kills * BATTLE_ROYALE_SCORING.killPoints)} pts
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={cancelEdit}>
+              <X className="mr-2 h-4 w-4" />
+              Cancelar
+            </Button>
+            <Button onClick={saveEdit} className="bg-blue-600 hover:bg-blue-700">
+              <Check className="mr-2 h-4 w-4" />
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };

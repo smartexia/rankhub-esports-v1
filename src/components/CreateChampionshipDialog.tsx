@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { TournamentWizard, TournamentConfig } from "@/components/TournamentWizard";
+import { ChampionshipScoringConfig } from "@/components/ChampionshipScoringConfig";
 
 interface CreateChampionshipDialogProps {
   onChampionshipCreated?: (championship: any) => void;
@@ -34,6 +35,13 @@ export function CreateChampionshipDialog({ onChampionshipCreated, trigger }: Cre
     championshipType: "individual",
     prize: "",
     rules: ""
+  });
+  const [scoringRules, setScoringRules] = useState({
+    posicao: {
+      "1": 20, "2": 15, "3": 12, "4": 10, "5": 8,
+      "6": 6, "7": 5, "8": 4, "9": 3, "10": 2
+    },
+    kill: 1
   });
 
   // Função para calcular o máximo de times baseado no tipo de campeonato
@@ -177,7 +185,10 @@ export function CreateChampionshipDialog({ onChampionshipCreated, trigger }: Cre
 
       const { data: championship, error: championshipError } = await supabase
         .from("championships")
-        .insert(championshipData)
+        .insert({
+          ...championshipData,
+          regras_pontuacao: scoringRules
+        })
         .select()
         .single();
 
@@ -364,6 +375,18 @@ export function CreateChampionshipDialog({ onChampionshipCreated, trigger }: Cre
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Configuração de Pontuação */}
+            <div className="space-y-2">
+              <Label className="font-rajdhani font-medium">
+                Configuração de Pontuação
+              </Label>
+              <ChampionshipScoringConfig
+                scoringRules={scoringRules}
+                onScoringRulesChange={setScoringRules}
+                maxTeams={parseInt(formData.maxTeams)}
+              />
             </div>
 
             <div className="space-y-2">

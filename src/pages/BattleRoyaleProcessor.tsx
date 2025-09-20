@@ -41,6 +41,7 @@ const BattleRoyaleProcessorPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [matchInfo, setMatchInfo] = useState<any>(null);
   const [championshipType, setChampionshipType] = useState<string>('squad');
+  const [scoringRules, setScoringRules] = useState<any>(null);
 
   // TESTE: Log simples para verificar se a página carrega
   console.log('🚀 TESTE: Battle Royale Processor Page iniciada');
@@ -82,11 +83,11 @@ const BattleRoyaleProcessorPage: React.FC = () => {
           throw new Error('Championship ID não encontrado na partida');
         }
 
-        // Buscar informações do campeonato para obter o tipo
+        // Buscar informações do campeonato para obter o tipo e regras de pontuação
         console.log('🔍 BUSCANDO INFORMAÇÕES DO CAMPEONATO:', match.championship_id);
         const { data: championshipData, error: championshipError } = await supabase
           .from('championships')
-          .select('tipo_campeonato')
+          .select('tipo_campeonato, regras_pontuacao')
           .eq('id', match.championship_id)
           .single();
 
@@ -94,10 +95,13 @@ const BattleRoyaleProcessorPage: React.FC = () => {
           console.error('❌ ERRO ao buscar campeonato:', championshipError);
           // Usar fallback se não conseguir buscar
           setChampionshipType('squad');
+          setScoringRules(null);
         } else {
           console.log('✅ CAMPEONATO ENCONTRADO:', championshipData);
           console.log('🎯 TIPO DO CAMPEONATO:', championshipData.tipo_campeonato);
+          console.log('🎯 REGRAS DE PONTUAÇÃO:', championshipData.regras_pontuacao);
           setChampionshipType(championshipData.tipo_campeonato || 'squad');
+          setScoringRules(championshipData.regras_pontuacao);
         }
 
         // Buscar times do campeonato - ORDENAÇÃO CONSISTENTE POR ID
@@ -287,6 +291,7 @@ const BattleRoyaleProcessorPage: React.FC = () => {
             onResultsProcessed={handleResultsProcessed}
             disabled={false}
             championshipType={championshipType}
+            scoringRules={scoringRules}
           />
         </div>
 
